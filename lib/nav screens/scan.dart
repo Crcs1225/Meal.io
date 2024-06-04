@@ -3,6 +3,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:ionicons/ionicons.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -145,7 +146,7 @@ class _DetectPageState extends State<DetectPage> {
           _showImagePreview(image);
         },
         icon: const Icon(
-          Icons.photo_library,
+          Ionicons.images,
           size: 50,
           color: Color(0xFF83ABD1),
         ));
