@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:meal_planner/other%20screens/tags.dart';
 import '../other screens/popular.dart';
 import '../models/instances.dart';
 import '../other screens/dish.dart';
@@ -186,6 +187,11 @@ class _HomePageState extends State<HomePage> {
                 return GestureDetector(
                   onTap: () {
                     // Handle onTap event
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TagScreen(),
+                        ));
                   },
                   child: Row(
                     children: [
