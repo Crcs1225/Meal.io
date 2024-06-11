@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 
@@ -272,7 +271,7 @@ class _DishState extends State<DishScreen> {
                                           fontWeight: FontWeight.bold,
                                           color: Color(0xFFA559D9),
                                           fontSize: 12),
-                                    ), //mkae it dynamic
+                                    ), //make it dynamic
                                     Text(
                                       '4 g',
                                       style: TextStyle(
