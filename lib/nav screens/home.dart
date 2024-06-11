@@ -101,10 +101,18 @@ class _HomePageState extends State<HomePage> {
                 return GestureDetector(
                   onTap: () {
                     // Handle onTap event, e.g., navigate to dish details page
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const DishScreen()));
+                    showModalBottomSheet(
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.vertical(
+                            top: Radius.circular(24),
+                          )
+                        ),
+                        context: context,
+                        builder: (context) => DishScreen(),
+
+                    );
                   },
                   child: Card(
                     color: const Color(0xFFBACBDB).withOpacity(.61),
