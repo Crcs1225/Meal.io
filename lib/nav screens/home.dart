@@ -13,10 +13,14 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final List<Dish> dishes = [
-    Dish(name: 'Pizza', type: 'Italian', tags: ['Soup Lover', 'Vegan']),
-    Dish(name: 'Burger', type: 'American', tags: ['Soup Lover']),
-    Dish(name: 'Sushi', type: 'Japanese', tags: ['Picky Eater']),
-    Dish(name: 'Taco', type: 'Mexican', tags: ['Loves Sweet']),
+    Dish(
+        name: 'Pizza',
+        type: 'Italian',
+        tags: ['Soup Lover', 'Vegan'],
+        dishId: 1),
+    Dish(name: 'Burger', type: 'American', tags: ['Soup Lover'], dishId: 2),
+    Dish(name: 'Sushi', type: 'Japanese', tags: ['Picky Eater'], dishId: 3),
+    Dish(name: 'Taco', type: 'Mexican', tags: ['Loves Sweet'], dishId: 4),
   ];
   final Map<String, List<String>> tags = {
     'Soup Lover': ['Pizza', 'Burger', 'Taco'],
@@ -102,16 +106,14 @@ class _HomePageState extends State<HomePage> {
                   onTap: () {
                     // Handle onTap event, e.g., navigate to dish details page
                     showModalBottomSheet(
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        shape: const RoundedRectangleBorder(
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.vertical(
-                            top: Radius.circular(24),
-                          )
-                        ),
-                        context: context,
-                        builder: (context) => DishScreen(),
-
+                        top: Radius.circular(24),
+                      )),
+                      context: context,
+                      builder: (context) => const DishScreen(),
                     );
                   },
                   child: Card(
