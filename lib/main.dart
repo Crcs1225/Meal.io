@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:meal_planner/other%20screens/results.dart';
 
 import 'nav screens/home.dart';
 import 'nav screens/nav.dart';
@@ -27,6 +28,8 @@ class MyApp extends StatelessWidget {
         '/home': (context) => const HomePage(),
         '/detect': (context) => const DetectPage(),
         '/profile': (context) => const ProfilePage(),
+        '/nav': (context) => const Navigation(),
+        '/results': (context) => const Results(),
       },
     );
   }
