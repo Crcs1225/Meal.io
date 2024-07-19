@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:meal_planner/other%20screens/results.dart';
-
 import 'nav screens/home.dart';
 import 'nav screens/nav.dart';
 import 'nav screens/profile.dart';
 import 'nav screens/scan.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
