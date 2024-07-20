@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:meal_planner/other%20screens/results.dart';
+import 'package:meal_planner/splash.dart';
 import 'nav screens/home.dart';
 import 'nav screens/nav.dart';
 import 'nav screens/profile.dart';
@@ -26,7 +27,7 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: '/',
       routes: {
-        '/': (context) => const Navigation(),
+        '/': (context) => const SplashScreen(),
         '/home': (context) => const HomePage(),
         '/detect': (context) => const DetectPage(),
         '/profile': (context) => const ProfilePage(),
