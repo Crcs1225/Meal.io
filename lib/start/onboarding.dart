@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:meal_planner/login/signup/login.dart';
+import 'package:meal_planner/auth/pick.dart';
 import 'package:meal_planner/start/onboarding_item.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
+import 'package:lottie/lottie.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -65,7 +66,7 @@ class _OnboardingViewState extends State<OnboardingScreen> {
               return Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset(controller.items[index].image),
+                  Lottie.asset(controller.items[index].image),
                   const SizedBox(height: 15),
                   Text(controller.items[index].title,
                     style: const TextStyle(fontSize: 30,fontWeight: FontWeight.bold),),
@@ -102,7 +103,7 @@ class _OnboardingViewState extends State<OnboardingScreen> {
             //After we press get started button this onboarding value become true
             // same key
             if(!mounted)return;
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=>const LoginScreen()));
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context)=>const PickScreen()));
           },
           child: const Text("Get started",style: TextStyle(color: Colors.white),)),
     );

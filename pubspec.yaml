@@ -47,6 +47,10 @@ dependencies:
   shared_preferences: ^2.2.3
   firebase_auth: ^5.1.2
   smooth_page_indicator: ^1.2.0
+  logger: ^2.4.0
+  flutter_svg: ^2.0.10+1
+  lottie: ^3.1.2
+  
 
 dev_dependencies:
   flutter_test:
@@ -76,6 +80,20 @@ flutter:
     - assets/Carbohydrates.png
     - assets/Fats.png
     - assets/Proteins.png
+    - assets/cook.gif
+    - assets/tagline.png
+    - assets/KitchenHelper.svg
+    - assets/pick_bg.png
+    - assets/logo.gif
+    - assets/icon.gif
+    - assets/logo.json
+    - assets/browse.json
+    - assets/last.json
+    - assets/recommend.json
+    - assets/scan.json
+    
+    
+
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware
