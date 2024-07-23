@@ -1,7 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:meal_planner/nav%20screens/nav.dart';
+import 'package:meal_planner/auth/user_profile.dart';
 import '../utility/logincheck.dart';
 import 'login.dart';
 
@@ -48,7 +48,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           if (mounted) {
             Navigator.pushAndRemoveUntil(
               context,
-              MaterialPageRoute(builder: (context) => const Navigation()),
+              MaterialPageRoute(builder: (context) => const UserProfile()),
               (route) => false,
             );
           }
