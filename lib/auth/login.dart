@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:meal_planner/auth/register.dart';
+import 'package:meal_planner/nav%20screens/nav.dart';
+import '../utility/logincheck.dart';
+import 'register.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,7 +14,43 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  bool _passwordVisible = false; // Track the visibility of the password
+  bool _passwordVisible = false;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await AuthService().signInWithEmailAndPassword(
+        _emailController.text,
+        _passwordController.text,
+      );
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const Navigation()),
+      );
+    } on Exception catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,18 +58,18 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0, // Remove AppBar shadow
+        elevation: 0,
         title: const Text(''),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start, // Align text to the left
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
                 'Welcome back!\nGlad to see you, Again!',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 24),
               Padding(
@@ -40,7 +78,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _emailController,
                   decoration: InputDecoration(
                     labelText: 'Enter your email',
-                    border: const OutlineInputBorder(borderSide: BorderSide.none),
+                    border:
+                        const OutlineInputBorder(borderSide: BorderSide.none),
                     filled: true,
                     fillColor: Colors.grey.withOpacity(0.1),
                   ),
@@ -51,15 +90,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: TextField(
                   controller: _passwordController,
-                  obscureText: !_passwordVisible, // Use the boolean variable here
+                  obscureText: !_passwordVisible,
                   decoration: InputDecoration(
                     labelText: 'Enter your password',
                     filled: true,
                     fillColor: Colors.grey.withOpacity(0.1),
-                    border: const OutlineInputBorder(borderSide: BorderSide.none),
+                    border:
+                        const OutlineInputBorder(borderSide: BorderSide.none),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _passwordVisible ? Icons.visibility : Icons.visibility_off,
+                        _passwordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off,
                       ),
                       onPressed: () {
                         setState(() {
@@ -86,24 +128,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF83ABD1), // Button color
-                    borderRadius: BorderRadius.circular(12.0), // Rounded edges
+                    color: const Color(0xFF83ABD1),
+                    borderRadius: BorderRadius.circular(12.0),
                   ),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent, // Make background color transparent
-                      elevation: 0, // Remove button elevation
+                      backgroundColor: Colors.transparent,
+                      elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.0), // Match border radius
+                        borderRadius: BorderRadius.circular(12.0),
                       ),
                     ),
-                    onPressed: () {
-                      // Navigate to the home screen or desired screen
-                    },
-                    child: const Text(
-                      'Login',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
+                    onPressed: _login,
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
+                            'Login',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                          ),
                   ),
                 ),
               ),
@@ -120,7 +164,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     padding: EdgeInsets.symmetric(horizontal: 16.0),
                     child: Text(
                       'Or login with',
-                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          color: Colors.grey, fontWeight: FontWeight.bold),
                     ),
                   ),
                   Expanded(
@@ -133,91 +178,86 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 40),
               Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.rectangle,
-            borderRadius: BorderRadius.circular(12.0),
-            
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.3),
-                spreadRadius: 2,
-                blurRadius: 5,
-                offset: const Offset(0, 3),
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.rectangle,
+                      borderRadius: BorderRadius.circular(12.0),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 2,
+                          blurRadius: 5,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                      color: Colors.white,
+                    ),
+                    child: IconButton(
+                      onPressed: () {
+                        // Add your Facebook login logic here
+                      },
+                      icon: const Icon(Icons.mail),
+                      iconSize: 30,
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.rectangle,
+                      borderRadius: BorderRadius.circular(12.0),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 2,
+                          blurRadius: 5,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                      color: Colors.white,
+                    ),
+                    child: IconButton(
+                      onPressed: () {
+                        // Add your Google login logic here
+                      },
+                      icon: const Icon(Ionicons.logo_google),
+                      iconSize: 30,
+                    ),
+                  ),
+                ],
               ),
-            ],
-            color: Colors.white,
-          ),
-          child: IconButton(
-            onPressed: () {
-              // Add your Facebook login logic here
-            },
-            icon: const Icon(Icons.mail),
-            iconSize: 50,
-          ),
-        ),
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.rectangle,
-            borderRadius: BorderRadius.circular(12.0),
-            
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.3),
-                spreadRadius: 2,
-                blurRadius: 5,
-                offset: const Offset(0, 3),
-              ),
-            ],
-            color: Colors.white,
-          ),
-          child: IconButton(
-            onPressed: () {
-              // Add your Google login logic here
-            },
-            icon: const Icon(Ionicons.logo_google),
-            iconSize: 50,
-          ),
-        ),
-      ],
-    ),
-    const SizedBox(height: 16,),
+              const SizedBox(height: 16),
               Center(
                 child: GestureDetector(
                   onTap: () {
                     // Navigate to the Sign Up screen
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const RegisterScreen()));
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const RegisterScreen()),
+                    );
                   },
                   child: RichText(
                     text: const TextSpan(
-                      style: TextStyle(color: Colors.black, fontSize: 16),
+                      style: TextStyle(color: Colors.black),
                       children: [
-                        TextSpan(
-                          text: "Don't have an account? ",
-                        ),
+                        TextSpan(text: "Don't have an account? "),
                         TextSpan(
                           text: 'Sign Up',
-                          style: TextStyle(color: Color(0xFFD0AD6D), fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: Color(0xFFD0AD6D),
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
               ),
-              // Add your social login buttons here
             ],
           ),
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
   }
 }

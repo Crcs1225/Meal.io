@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:meal_planner/auth/pick.dart';
-import 'package:meal_planner/nav%20screens/home.dart';
+import 'package:meal_planner/nav%20screens/nav.dart';
 import 'package:meal_planner/start/onboarding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -41,7 +41,7 @@ class SplashScreenState extends State<SplashScreen> {
           if (user != null) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const HomePage()),
+              MaterialPageRoute(builder: (context) => const Navigation()),
             );
           } else {
             Navigator.pushReplacement(
@@ -56,15 +56,13 @@ class SplashScreenState extends State<SplashScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor:  Color(0xFF83ABD1),
+      backgroundColor: Color(0xFF83ABD1),
       body: Center(
         child: CircularProgressIndicator(),
       ),
     );
   }
 }
-

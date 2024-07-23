@@ -1,6 +1,9 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:meal_planner/auth/login.dart';
+import 'package:meal_planner/nav%20screens/nav.dart';
+import '../utility/logincheck.dart';
+import 'login.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -13,8 +16,58 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
-  bool _passwordVisible = false; // Track the visibility of the password
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
+  bool _passwordVisible = false;
+  final AuthService _authService = AuthService();
+  bool _isLoading = false;
+
+  Future<void> _register() async {
+    if (_passwordController.text.trim() !=
+        _confirmPasswordController.text.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      User? user = await _authService.registerWithEmailAndPassword(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+        _usernameController.text.trim(),
+      );
+
+      if (user != null) {
+        // Use Navigator in a context-safe manner
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const Navigation()),
+              (route) => false,
+            );
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +75,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        elevation: 0, // Remove AppBar shadow
+        elevation: 0,
         title: const Text(''),
       ),
       body: SafeArea(
@@ -33,7 +86,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               const Text(
                 'Hello! Sign Up to get\nstarted',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 26),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 30),
               ),
               const SizedBox(height: 24),
               Padding(
@@ -42,7 +95,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _usernameController,
                   decoration: InputDecoration(
                     labelText: 'Username',
-                    border: const OutlineInputBorder(borderSide: BorderSide.none),
+                    border:
+                        const OutlineInputBorder(borderSide: BorderSide.none),
                     filled: true,
                     fillColor: Colors.grey.withOpacity(0.1),
                   ),
@@ -55,7 +109,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _emailController,
                   decoration: InputDecoration(
                     labelText: 'Email',
-                    border: const OutlineInputBorder(borderSide: BorderSide.none),
+                    border:
+                        const OutlineInputBorder(borderSide: BorderSide.none),
                     filled: true,
                     fillColor: Colors.grey.withOpacity(0.1),
                   ),
@@ -71,10 +126,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: 'Password',
                     filled: true,
                     fillColor: Colors.grey.withOpacity(0.1),
-                    border: const OutlineInputBorder(borderSide: BorderSide.none),
+                    border:
+                        const OutlineInputBorder(borderSide: BorderSide.none),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _passwordVisible ? Icons.visibility : Icons.visibility_off,
+                        _passwordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off,
                       ),
                       onPressed: () {
                         setState(() {
@@ -95,10 +153,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: 'Confirm Password',
                     filled: true,
                     fillColor: Colors.grey.withOpacity(0.1),
-                    border: const OutlineInputBorder(borderSide: BorderSide.none),
+                    border:
+                        const OutlineInputBorder(borderSide: BorderSide.none),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _passwordVisible ? Icons.visibility : Icons.visibility_off,
+                        _passwordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off,
                       ),
                       onPressed: () {
                         setState(() {
@@ -115,28 +176,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF83ABD1), // Button color
-                    borderRadius: BorderRadius.circular(12.0), // Rounded edges
+                    color: const Color(0xFF83ABD1),
+                    borderRadius: BorderRadius.circular(12.0),
                   ),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent, // Make background color transparent
-                      elevation: 0, // Remove button elevation
+                      backgroundColor: Colors.transparent,
+                      elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12.0), // Match border radius
+                        borderRadius: BorderRadius.circular(12.0),
                       ),
                     ),
-                    onPressed: () {
-                      // Add your sign-up logic here
-                    },
-                    child: const Text(
-                      'Sign Up',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
+                    onPressed: _register,
+                    child: _isLoading
+                        ? const CircularProgressIndicator()
+                        : const Text(
+                            'Sign Up',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                          ),
                   ),
                 ),
               ),
-              const SizedBox(height: 24,),
+              const SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(
@@ -149,7 +212,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     padding: EdgeInsets.symmetric(horizontal: 16.0),
                     child: Text(
                       'Or sign up with',
-                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          color: Colors.grey, fontWeight: FontWeight.bold),
                     ),
                   ),
                   Expanded(
@@ -162,73 +226,77 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 40),
               Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.rectangle,
-            borderRadius: BorderRadius.circular(12.0),
-            
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.3),
-                spreadRadius: 2,
-                blurRadius: 5,
-                offset: const Offset(0, 3),
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.rectangle,
+                      borderRadius: BorderRadius.circular(12.0),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 2,
+                          blurRadius: 5,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                      color: Colors.white,
+                    ),
+                    child: IconButton(
+                      onPressed: () {
+                        // Add your Facebook login logic here
+                      },
+                      icon: const Icon(Icons.mail),
+                      iconSize: 30,
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.rectangle,
+                      borderRadius: BorderRadius.circular(12.0),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.3),
+                          spreadRadius: 2,
+                          blurRadius: 5,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                      color: Colors.white,
+                    ),
+                    child: IconButton(
+                      onPressed: () {
+                        // Add your Google login logic here
+                      },
+                      icon: const Icon(Ionicons.logo_google),
+                      iconSize: 30,
+                    ),
+                  ),
+                ],
               ),
-            ],
-            color: Colors.white,
-          ),
-          child: IconButton(
-            onPressed: () {
-              // Add your Facebook login logic here
-            },
-            icon: const Icon(Icons.mail),
-            iconSize: 50,
-          ),
-        ),
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.rectangle,
-            borderRadius: BorderRadius.circular(12.0),
-            
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.3),
-                spreadRadius: 2,
-                blurRadius: 5,
-                offset: const Offset(0, 3),
-              ),
-            ],
-            color: Colors.white,
-          ),
-          child: IconButton(
-            onPressed: () {
-              // Add your Google login logic here
-            },
-            icon: const Icon(Ionicons.logo_google),
-            iconSize: 50,
-          ),
-        ),
-      ],
-    ),
-    const SizedBox(height: 16,),
+              const SizedBox(height: 16),
               Center(
                 child: GestureDetector(
                   onTap: () {
-                    // Navigate to the Sign Up screen
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const LoginScreen()),
+                    );
                   },
                   child: RichText(
                     text: const TextSpan(
-                      style: TextStyle(color: Colors.black, fontSize: 16),
+                      style: TextStyle(color: Colors.black),
                       children: [
                         TextSpan(
                           text: "Already have an account? ",
                         ),
                         TextSpan(
                           text: 'Login',
-                          style: TextStyle(color: Color(0xFFD0AD6D), fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: Color(0xFFD0AD6D),
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),

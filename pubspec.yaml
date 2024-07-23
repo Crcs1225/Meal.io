@@ -91,6 +91,8 @@ flutter:
     - assets/last.json
     - assets/recommend.json
     - assets/scan.json
+    - assets/welcome.svg
+    
     
     
 

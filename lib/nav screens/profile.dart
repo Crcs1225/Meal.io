@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../auth/pick.dart'; // Adjust import as needed
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -9,6 +11,8 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -20,14 +24,12 @@ class _ProfilePageState extends State<ProfilePage> {
               Column(
                 children: [
                   Container(
-                    margin: const EdgeInsets.symmetric(
-                        horizontal: 16.0), // Add margin to the left and right
+                    margin: const EdgeInsets.symmetric(horizontal: 16.0),
                     height: 250,
                     width: double.infinity,
                     decoration: BoxDecoration(
                       color: const Color(0xFFDED8DC),
-                      borderRadius:
-                          BorderRadius.circular(16.0), // Add border radius
+                      borderRadius: BorderRadius.circular(16.0),
                     ),
                     child: const Center(
                       child: Column(
@@ -40,7 +42,6 @@ class _ProfilePageState extends State<ProfilePage> {
                             child: Icon(Icons.person,
                                 size: 50, color: Colors.white),
                           ),
-                          //Dynamic Data for this
                           Text('John Doe',
                               style: TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.bold)),
@@ -57,12 +58,16 @@ class _ProfilePageState extends State<ProfilePage> {
                         const EdgeInsets.only(top: 40, right: 40, left: 32),
                     child: Column(
                       children: [
-                        _buildSettingsRow(Ionicons.person, 'Profile'),
-                        _buildSettingsRow(Ionicons.star, 'Preferences'),
                         _buildSettingsRow(
-                            Ionicons.lock_closed, 'Privacy and Policy'),
-                        _buildSettingsRow(Ionicons.settings, 'Settings'),
-                        _buildSettingsRow(Ionicons.log_out, 'Logout'),
+                            Ionicons.person, 'Profile', _profileFunction),
+                        _buildSettingsRow(
+                            Ionicons.star, 'Preferences', _preferencesFunction),
+                        _buildSettingsRow(Ionicons.lock_closed,
+                            'Privacy and Policy', _privacyPolicyFunction),
+                        _buildSettingsRow(
+                            Ionicons.settings, 'Settings', _settingsFunction),
+                        _buildSettingsRow(
+                            Ionicons.log_out, 'Logout', _showLogoutDialog),
                       ],
                     ),
                   ),
@@ -77,12 +82,11 @@ class _ProfilePageState extends State<ProfilePage> {
                     fontSize: 20,
                     color: Color(0xFF333333),
                     fontWeight: FontWeight.bold,
-                    // Optional for better readability
                   ),
                 ),
               ),
               Positioned(
-                top: 215, // Adjusted to be just below the first container
+                top: 215,
                 left: 0,
                 right: 0,
                 child: Padding(
@@ -99,7 +103,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          //Dynamic Data here
                           Column(
                             children: [
                               Text('70 kg',
@@ -151,25 +154,91 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildSettingsRow(IconData icon, String text) {
+  Widget _buildSettingsRow(IconData icon, String text, Function() onTap) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: const Color(0xFFD0AD6D),
-            child: Icon(icon, color: Colors.white),
-          ),
-          const SizedBox(width: 16),
-          Text(text, style: const TextStyle(fontSize: 18)),
-          const Spacer(),
-          const Icon(
-            Ionicons.play,
-            size: 10,
-            color: Color(0xFF9F9B98),
-          ),
-        ],
+      child: InkWell(
+        onTap: onTap,
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: const Color(0xFFD0AD6D),
+              child: Icon(icon, color: Colors.white),
+            ),
+            const SizedBox(width: 16),
+            Text(text, style: const TextStyle(fontSize: 18)),
+            const Spacer(),
+            IconButton(
+              icon:
+                  const Icon(Ionicons.play, size: 12, color: Color(0xFF9F9B98)),
+              onPressed: onTap,
+            )
+          ],
+        ),
       ),
     );
+  }
+
+  void _profileFunction() {
+    // Define your profile function here
+  }
+
+  void _preferencesFunction() {
+    // Define your preferences function here
+  }
+
+  void _privacyPolicyFunction() {
+    // Define your privacy policy function here
+  }
+
+  void _settingsFunction() {
+    // Define your settings function here
+  }
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop(); // Close the dialog
+                await _logout(); // Log out and navigate
+              },
+              child: const Text('Logout'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(); // Close the dialog
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _logout() async {
+    try {
+      await _auth.signOut(); // Sign out from Firebase
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+              builder: (context) =>
+                  const PickScreen()), // Navigate to PickScreen
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Logout failed: $e')),
+        );
+      }
+    }
   }
 }

@@ -1,26 +1,26 @@
- import 'onboarding_info.dart';
+import 'onboarding_info.dart';
 
-class OnboardingItems{
+class OnboardingItems {
   List<OnboardingInfo> items = [
     OnboardingInfo(
         title: "Browse Recipe",
-        descriptions: "A scientist in his laboratory is not a mere technician: he is also a child confronting natural phenomena that impress him as though they were fairy tales.",
+        descriptions:
+            "Explore a vast collection of recipes tailored to your taste and preferences.",
         image: "assets/browse.json"),
-
     OnboardingInfo(
         title: "Scan Ingrediens",
-        descriptions: "There is little you can do to stop a tornado, a hurricane, or a cancer diagnosis from changing your life in an instant.",
+        descriptions:
+            "Quickly scan your ingredients to find matching recipes and nutritional information.",
         image: "assets/scan.json"),
-
     OnboardingInfo(
         title: "Recommendation",
-        descriptions: "Cancer taught my family that my mom is much stronger than we ever thought.",
+        descriptions:
+            "Get personalized recipe recommendations based on your dietary needs and preferences.",
         image: "assets/recommend.json"),
-
     OnboardingInfo(
-        title: "User Friendly",
-        descriptions: "A healthy heart is a key to happiness in life so put a stop to all of the problems related to your heart before it stops you.",
+        title: "Cook",
+        descriptions:
+            "Follow step-by-step instructions to create delicious meals with ease.",
         image: "assets/last.json"),
-
   ];
- }
+}
