@@ -1,7 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:meal_planner/other%20screens/updateinfo.dart';
 import '../auth/pick.dart'; // Adjust import as needed
+import 'package:intl/intl.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -12,6 +15,43 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  String name = 'name';
+  String email = 'email';
+  String birthday = ''; // Placeholder for birthday
+  int weight = 0; // Placeholder for weight
+  int age = 0; // Placeholder for age
+  int height = 0; // Placeholder for height
+  String profilePicture = ''; // Placeholder for profile picture URL
+
+  Future<void> _fetchProfileData() async {
+    String userId = FirebaseAuth
+        .instance.currentUser!.uid; // Assuming the user is logged in
+
+    DocumentSnapshot doc =
+        await FirebaseFirestore.instance.collection('users').doc(userId).get();
+
+    if (doc.exists) {
+      setState(() {
+        name = doc['name'] ?? 'name';
+        email = doc['email'] ?? 'email';
+        // Convert the Timestamp to DateTime
+        DateTime dateOfBirth = (doc['birthday'] as Timestamp).toDate();
+
+        // Format the DateTime to a string like "March 12, 2000"
+        birthday = DateFormat('MMMM d, yyyy').format(dateOfBirth);
+        weight = doc['weight']?.toInt() ?? 0.0;
+        age = doc['age']?.toInt() ?? 0.0;
+        height = doc['height']?.toInt() ?? 0.0;
+        profilePicture = doc['profilePicture'] ?? '';
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfileData(); // Fetch profile data when the widget is created
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,24 +71,32 @@ class _ProfilePageState extends State<ProfilePage> {
                       color: const Color(0xFFDED8DC),
                       borderRadius: BorderRadius.circular(16.0),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           CircleAvatar(
                             radius: 50,
-                            backgroundColor: Colors.grey,
-                            child: Icon(Icons.person,
-                                size: 50, color: Colors.white),
+                            backgroundColor:
+                                profilePicture.isEmpty ? Colors.white : null,
+                            backgroundImage: profilePicture.isNotEmpty
+                                ? NetworkImage(profilePicture)
+                                : null, // No background image if URL is empty
+                            child: profilePicture.isEmpty
+                                ? const Icon(
+                                    Icons
+                                        .person, // The icon to display when no profile picture is available
+                                    size: 50,
+                                    color: Colors.grey,
+                                  )
+                                : null, // No child widget when the URL is not empty (i.e., image is used)
                           ),
-                          Text('John Doe',
-                              style: TextStyle(
+                          Text(name,
+                              style: const TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.bold)),
-                          Text('johndoe@gmail.com',
-                              style: TextStyle(fontSize: 14)),
-                          Text('March 12, 2000',
-                              style: TextStyle(fontSize: 14)),
+                          Text(email, style: const TextStyle(fontSize: 14)),
+                          Text(birthday, style: const TextStyle(fontSize: 14)),
                         ],
                       ),
                     ),
@@ -91,57 +139,58 @@ class _ProfilePageState extends State<ProfilePage> {
                 right: 0,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40),
-                  child: Container(
-                    width: double.infinity,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF83ABD1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Padding(
-                      padding: EdgeInsets.all(10.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          Column(
-                            children: [
-                              Text('70 kg',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold)),
-                              Text('Weight',
-                                  style: TextStyle(
-                                      fontSize: 14, color: Colors.white)),
-                            ],
-                          ),
-                          VerticalDivider(),
-                          Column(
-                            children: [
-                              Text('25',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold)),
-                              Text('Years Old',
-                                  style: TextStyle(
-                                      fontSize: 14, color: Colors.white)),
-                            ],
-                          ),
-                          VerticalDivider(),
-                          Column(
-                            children: [
-                              Text('180 cm',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold)),
-                              Text('Height',
-                                  style: TextStyle(
-                                      fontSize: 14, color: Colors.white)),
-                            ],
-                          ),
-                        ],
+                  child: SizedBox(
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF83ABD1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(10.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            Column(
+                              children: [
+                                Text('${weight.toString()} kg',
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold)),
+                                const Text('Weight',
+                                    style: TextStyle(
+                                        fontSize: 14, color: Colors.white)),
+                              ],
+                            ),
+                            const VerticalDivider(),
+                            Column(
+                              children: [
+                                Text(age.toString(),
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold)),
+                                const Text('Years Old',
+                                    style: TextStyle(
+                                        fontSize: 14, color: Colors.white)),
+                              ],
+                            ),
+                            const VerticalDivider(),
+                            Column(
+                              children: [
+                                Text('${height.toString()} cm',
+                                    style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold)),
+                                const Text('Height',
+                                    style: TextStyle(
+                                        fontSize: 14, color: Colors.white)),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -180,7 +229,8 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _profileFunction() {
-    // Define your profile function here
+    Navigator.push(context,
+        MaterialPageRoute(builder: (context) => const UpdateProfileScreen()));
   }
 
   void _preferencesFunction() {
