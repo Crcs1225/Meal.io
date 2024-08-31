@@ -52,6 +52,8 @@ dependencies:
   lottie: ^3.1.2
   firebase_storage: ^12.1.1
   intl: ^0.19.0
+  tflite_flutter: ^0.10.4
+  http: ^1.2.2
   
 
 dev_dependencies:
@@ -95,7 +97,8 @@ flutter:
     - assets/scan.json
     - assets/welcome.svg
     - assets/loading.json
-    
+    - assets/ranking.tflite
+    - assets/user_retrieval.tflite
     
     
 

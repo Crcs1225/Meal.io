@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:meal_planner/other%20screens/preference.dart';
+import 'package:meal_planner/other%20screens/privacy.dart';
+import 'package:meal_planner/other%20screens/settings.dart';
 import 'package:meal_planner/other%20screens/updateinfo.dart';
 import '../auth/pick.dart'; // Adjust import as needed
 import 'package:intl/intl.dart';
@@ -235,14 +238,20 @@ class _ProfilePageState extends State<ProfilePage> {
 
   void _preferencesFunction() {
     // Define your preferences function here
+    Navigator.push(context,
+        MaterialPageRoute(builder: (context) => const PreferenceScreen()));
   }
 
   void _privacyPolicyFunction() {
     // Define your privacy policy function here
+    Navigator.push(context,
+        MaterialPageRoute(builder: (context) => const PrivacyScreen()));
   }
 
   void _settingsFunction() {
     // Define your settings function here
+    Navigator.push(context,
+        MaterialPageRoute(builder: (context) => const SettingScreen()));
   }
 
   void _showLogoutDialog() {

@@ -7,6 +7,8 @@ import 'package:ionicons/ionicons.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../other screens/results.dart';
+
 class DetectPage extends StatefulWidget {
   const DetectPage({super.key});
 
@@ -20,6 +22,20 @@ class _DetectPageState extends State<DetectPage> {
   final ImagePicker _picker = ImagePicker();
   XFile? _imageFile;
   bool _flashOn = false;
+  List<String> ingredients = [
+    'avocado',
+    'sour cream',
+    'salsa',
+    'garlic clove',
+    'sweet onion',
+    'cilantro',
+    'tomatoes',
+    'black olives',
+    'fresh lemon juice',
+    'salt'
+  ];
+
+  //test inredients
 
   @override
   void initState() {
@@ -119,7 +135,12 @@ class _DetectPageState extends State<DetectPage> {
             TextButton(
               onPressed: () {
                 // Handle image confirmation (you can implement further processing here)
-                Navigator.pop(dialogContext);
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => Results(ingredients: ingredients),
+                  ),
+                );
               },
               child: const Text('Confirm'),
             ),

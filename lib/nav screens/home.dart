@@ -1,6 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:meal_planner/other%20screens/tags.dart';
 import '../other screens/popular.dart';
 import '../other screens/dish.dart';
 
@@ -15,165 +18,250 @@ class _HomePageState extends State<HomePage> {
   List<DocumentSnapshot> _searchResults = [];
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _topRecipes = [];
-  Map<String, int> _tags = {};
   bool _isLoading = true;
+  bool _isLoadingrec = false;
+  String ip = 'http://192.168.100.3:5000';
+  String userId = "";
+  final TextEditingController _ingredientController = TextEditingController();
+  final List<String> _ingredients = [];
+  List _recommendations = [];
+  List _recommendedTagRecipes = [];
+  List<String> _selectedTags = [];
 
+  //add ingredients to the list
+  void _addIngredient() {
+    setState(() {
+      _ingredients.add(_ingredientController.text);
+      _ingredientController.clear();
+    });
+  }
+
+  //remove items in the list of ingredient
+  void _removeIngredient(String ingredient) {
+    setState(() {
+      _ingredients.remove(ingredient);
+    });
+  }
+
+  //posr request for ingredient recommendation
+  void _getRecommendations() async {
+    final url =
+        Uri.parse('$ip/ingredient-based'); // Replace with your Flask server URL
+    final response = await http.post(
+      url,
+      headers: {"Content-Type": "application/json"},
+      body: json.encode({
+        'input_ingredients': _ingredients,
+        'num_similar': 5,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      setState(() {
+        _recommendations = json.decode(response.body);
+      });
+    } else {
+      // Handle error
+      print('Failed to get recommendations');
+    }
+  }
+
+  // Search function querying Firestore
   void _searchRecipes(String query) async {
     if (query.isNotEmpty) {
       QuerySnapshot result = await FirebaseFirestore.instance
           .collection('recipe')
-          .where('name', isGreaterThanOrEqualTo: query)
-          .where('name', isLessThanOrEqualTo: '$query\uf8ff')
+          .orderBy('name')
+          .startAt([query])
+          .endAt(['$query\uf8ff'])
           .limit(5)
           .get();
 
-      setState(() {
-        _searchResults = result.docs;
-      });
+      if (mounted) {
+        setState(() {
+          _searchResults = result.docs;
+        });
+      }
     } else {
-      setState(() {
-        _searchResults.clear();
-      });
+      if (mounted) {
+        setState(() {
+          _searchResults.clear();
+        });
+      }
     }
   }
 
-  //Change this later to fetch on from top_recipes collection to fetch to this recipe colelction
-  Future<List<Map<String, dynamic>>> _fetchTopRecipes() async {
-    try {
-      // Fetch top 100 recipes based on the rating
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('recipe')
-          .orderBy('rating', descending: true) // Order by rating, descending
-          .limit(100) // Limit to top 100 recipes
-          .get();
+  //search utility fucntion
+  Timer? _debounce;
 
-      // Check if snapshot contains any documents
-      if (snapshot.docs.isEmpty) {
-        print('No recipes found in Firestore.');
-        return [];
+  void _onSearchChanged(String query) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      _searchRecipes(query);
+    });
+  }
+
+  //fetch user id  to feed to the you may like model
+  Future<String?> _fetchUserId() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+
+      if (currentUser == null) {
+        print('No user is currently signed in.');
+        return null;
       }
 
-      // Convert documents to a list of maps with document IDs
-      List<Map<String, dynamic>> recipes = snapshot.docs.map((doc) {
-        var data = doc.data() as Map<String, dynamic>;
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
 
-        // Add the document ID to the map
-        data['docId'] = doc.id;
-
-        // Convert rating from string to double
-        if (data['rating'] != null) {
-          try {
-            data['rating'] = double.tryParse(data['rating']) ?? 0.0;
-          } catch (e) {
-            data['rating'] = 0.0;
+      if (userDoc.exists) {
+        Map<String, dynamic>? userData =
+            userDoc.data() as Map<String, dynamic>?;
+        if (userData != null) {
+          String? userId = userData['user_id'] as String?;
+          if (userId != null) {
+            print('Fetched user ID: $userId');
+            return userId;
+          } else {
+            print('Field "user_id" is missing or is not a string.');
           }
+        } else {
+          print('User document data is null.');
         }
-
-        return data;
-      }).toList();
-
-      // Sort recipes by rating
-      recipes.sort(
-          (a, b) => (b['rating'] as double).compareTo(a['rating'] as double));
-
-      print('Fetched ${recipes.length} recipes from Firestore.');
-      return recipes;
+      } else {
+        print('User document not found.');
+      }
     } catch (e) {
-      print('Error fetching top recipes: $e');
-      return [];
+      print('Error fetching user ID: $e');
     }
+    return null;
   }
 
+  //you may like machine learning post request
   Future<void> _loadTopRecipes() async {
     setState(() {
-      _isLoading = true; // Start loading
+      _isLoadingrec = true;
     });
+
     try {
-      List<Map<String, dynamic>> recipes = await _fetchTopRecipes();
+      String? userId = await _fetchUserId();
+      print('Fetched user ID: $userId');
 
-      if (recipes.isEmpty) {
-        print('No recipes loaded.');
+      if (userId != null) {
+        final response = await http.post(
+          Uri.parse('$ip/you-may-like'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'user_id': userId}),
+        );
+
+        print('Response status: ${response.statusCode}');
+        print('Response body: ${response.body}');
+
+        if (response.statusCode == 200) {
+          final List<dynamic> responseBody = jsonDecode(response.body);
+
+          if (mounted) {
+            setState(() {
+              _topRecipes = responseBody.cast<Map<String, dynamic>>();
+            });
+          }
+        } else {
+          print(
+              'Failed to get recommendations. Status code: ${response.statusCode}');
+        }
       } else {
-        print('Loaded ${recipes.length} recipes.');
+        print('Failed to fetch user ID.');
       }
-
-      setState(() {
-        _topRecipes = recipes.take(10).toList(); // Display top 10 recipes
-        _isLoading = false; // Stop loading
-      });
     } catch (e) {
-      print('Error loading top recipes: $e');
+      print('Error during loading top recipes: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingrec = false;
+        });
+      }
+    }
+  }
+
+  //post request for recommendind based on tags
+  Future<void> _fetchTagBasedRecommendations() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final url = Uri.parse('$ip/tag-based');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          'input_tags': _selectedTags,
+          'num_similar': 5,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> responseBody = jsonDecode(response.body);
+        setState(() {
+          _recommendedTagRecipes = responseBody.cast<Map<String, dynamic>>();
+          _isLoading = false;
+        });
+      } else {
+        print(
+            'Failed to get tag-based recommendations. Status code: ${response.statusCode}');
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching tag-based recommendations: $e');
       setState(() {
-        _isLoading = false; // Stop loading even on error
+        _isLoading = false;
       });
     }
   }
 
-  Future<void> _fetchTags() async {
-    setState(() {
-      _isLoading = true; // Set loading to true when starting to fetch data
-    });
-
+  Future<void> _fetchUserPreferences() async {
     try {
-      // Define the tags you're interested in
-      List<String> specificTags = [
-        'vegetarian',
-        'vegan',
-        'low-carb',
-        'gluten-free',
-        'dairy-free'
-      ];
+      User? currentUser = FirebaseAuth.instance.currentUser;
 
-      // Query Firestore for documents where 'tag' is in the specificTags list
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('tags')
-          .where('tag', whereIn: specificTags)
-          .get();
+      if (currentUser != null) {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
 
-      if (snapshot.docs.isEmpty) {
-        print('No documents found in the tags collection.');
-        setState(() {
-          _isLoading = false; // Set loading to false since data is fetched
-        });
-        return;
-      }
-
-      print(
-          'Fetched ${snapshot.docs.length} documents from the tags collection.');
-
-      // Create a map to hold tags and their counts
-      Map<String, int> tagCounts = {};
-
-      for (var doc in snapshot.docs) {
-        var data = doc.data() as Map<String, dynamic>;
-
-        // Access the 'tag' and 'count' fields
-        var tagName = data['tag'] as String?;
-        var tagCount = data['count'] as int? ?? 0;
-
-        if (tagName != null) {
-          tagCounts[tagName] = tagCount;
+        if (userDoc.exists) {
+          Map<String, dynamic>? userData =
+              userDoc.data() as Map<String, dynamic>?;
+          if (userData != null) {
+            List<dynamic>? preferences =
+                userData['preferences'] as List<dynamic>?;
+            if (preferences != null) {
+              print(preferences);
+              setState(() {
+                _selectedTags =
+                    preferences.map((tag) => tag.toString()).toList();
+              });
+              // Ensure that tag-based recommendations are fetched after preferences are set
+              await _fetchTagBasedRecommendations();
+            } else {
+              print('Field "preferences" is missing or is not a list.');
+            }
+          } else {
+            print('User document data is null.');
+          }
+        } else {
+          print('User document not found.');
         }
+      } else {
+        print('No user is currently signed in.');
       }
-
-      // Sort tags by their counts and get the top 4 tags
-      var sortedTags = tagCounts.entries.toList()
-        ..sort((a, b) => b.value.compareTo(a.value));
-
-      var topTags = Map.fromEntries(sortedTags);
-      print('Top Tags: $topTags');
-
-      // Assign to _tags
-      _tags = topTags;
-
-      setState(() {
-        _isLoading = false; // Set loading to false after data is processed
-      });
     } catch (e) {
-      print('Error fetching tags: $e');
-      setState(() {
-        _isLoading = false; // Set loading to false if an error occurs
-      });
+      print('Error fetching user preferences: $e');
     }
   }
 
@@ -181,7 +269,14 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _loadTopRecipes();
-    _fetchTags();
+    _fetchUserPreferences();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
   }
 
   @override
@@ -206,6 +301,7 @@ class _HomePageState extends State<HomePage> {
                   borderRadius: BorderRadius.circular(16.0),
                 ),
                 child: TextField(
+                  onChanged: _onSearchChanged,
                   controller: _searchController,
                   decoration: const InputDecoration(
                     hintText: 'Search Recipes',
@@ -216,7 +312,6 @@ class _HomePageState extends State<HomePage> {
                         EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
                   ),
                   style: const TextStyle(color: Color(0xFF9F9B98)),
-                  onChanged: (query) => _searchRecipes(query),
                 ),
               ),
               Flexible(
@@ -226,7 +321,7 @@ class _HomePageState extends State<HomePage> {
                   itemBuilder: (context, index) {
                     var recipe =
                         _searchResults[index].data() as Map<String, dynamic>;
-                    var recipeId = _searchResults[index].id;
+
                     return ListTile(
                       title: Text(recipe['name']),
                       onTap: () {
@@ -234,8 +329,9 @@ class _HomePageState extends State<HomePage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) =>
-                                DishScreen(recipeId: recipeId),
+                            builder: (context) => DishScreen(
+                              recipeData: recipe,
+                            ),
                           ),
                         );
                       },
@@ -257,16 +353,17 @@ class _HomePageState extends State<HomePage> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 const Text(
-                  'Popular Food Recipes',
+                  'Recipes You May Like',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 GestureDetector(
                   onTap: () {
                     Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const PopularListScreen()));
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const PopularListScreen()),
+                    );
                   },
                   child: const Text(
                     'View all',
@@ -283,7 +380,7 @@ class _HomePageState extends State<HomePage> {
           Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
-            child: _isLoading
+            child: _isLoadingrec
                 ? const Center(
                     child:
                         CircularProgressIndicator(), // Show loading indicator
@@ -298,16 +395,23 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       )
-                    : ListView.builder(
+                    : GridView.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2, // Number of items per row
+                          crossAxisSpacing:
+                              8.0, // Space between items horizontally
+                          mainAxisSpacing:
+                              8.0, // Space between items vertically
+                          childAspectRatio: 0.8, // Aspect ratio of the cards
+                        ),
                         itemCount: _topRecipes.length,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemBuilder: (context, index) {
                           final dish = _topRecipes[index];
-
                           return GestureDetector(
                             onTap: () {
-                              var recipeId = dish['docId'];
                               showModalBottomSheet(
                                 isScrollControlled: true,
                                 backgroundColor: Colors.transparent,
@@ -317,59 +421,53 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 context: context,
                                 builder: (context) => DishScreen(
-                                  recipeId: recipeId,
+                                  recipeData:
+                                      dish, // Pass the entire dish object
                                 ),
                               );
                             },
                             child: Card(
-                              color: const Color(0xFFBACBDB).withOpacity(.61),
+                              elevation:
+                                  4.0, // Add elevation for card-like appearance
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16.0),
+                                borderRadius: BorderRadius.circular(12.0),
                               ),
-                              elevation: 2,
                               child: Padding(
                                 padding: const EdgeInsets.all(8.0),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '${index + 1}. ${dish['name'] ?? 'Recipe Name'}',
-                                            style: const TextStyle(
-                                              fontSize: 16.0,
-                                              color: Color(0xFF333333),
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
+                                    Container(
+                                      height: 80, // Adjust height as needed
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[200],
+                                        borderRadius:
+                                            BorderRadius.circular(12.0),
+                                      ),
+                                      child: const Center(
+                                        child: Icon(
+                                          Icons.fastfood,
+                                          size: 40,
+                                          color: Colors.grey,
+                                        ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8.0),
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          (dish['rating'] as double?)
-                                                  ?.toStringAsFixed(1) ??
-                                              '0.0',
-                                          style: const TextStyle(
-                                            fontSize: 14.0,
-                                            color: Color(0xFF333333),
-                                          ),
-                                        ),
-                                        const Icon(
-                                          Icons.star,
-                                          color: Colors.amber,
-                                          size: 24.0,
-                                        ),
-                                      ],
+                                    const SizedBox(height: 8.0),
+                                    Text(
+                                      (dish['name'] ?? '').toUpperCase(),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4.0),
+                                    Text(
+                                      'Rating: ${(dish['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                                      style: const TextStyle(
+                                        color: Colors.black,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),
@@ -388,13 +486,12 @@ class _HomePageState extends State<HomePage> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.0),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Tags',
+                  'Based on User Preferences',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                Spacer(),
                 Text(
                   'View all',
                   style: TextStyle(
@@ -402,7 +499,7 @@ class _HomePageState extends State<HomePage> {
                     fontSize: 12,
                     color: Color(0xFFD0AD6D),
                   ),
-                )
+                ),
               ],
             ),
           ),
@@ -412,85 +509,297 @@ class _HomePageState extends State<HomePage> {
                 ? const Center(
                     child: CircularProgressIndicator(),
                   )
-                : GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2, // Two columns
-                      crossAxisSpacing: 4.0, // Adjust spacing as needed
-                      mainAxisSpacing: 4.0, // Adjust spacing as needed
-                      childAspectRatio: 3.0, // Adjust for desired aspect ratio
-                    ),
-                    itemBuilder: (context, index) {
-                      if (index >= _tags.length) {
-                        return const SizedBox
-                            .shrink(); // Avoid out-of-range errors
-                      }
+                : SizedBox(
+                    height: 200, // Adjust height as needed
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _recommendedTagRecipes
+                          .length, // Number of tag-based recommended recipes
+                      itemBuilder: (context, index) {
+                        if (index >= _recommendedTagRecipes.length) {
+                          return const SizedBox
+                              .shrink(); // Avoid out-of-range errors
+                        }
 
-                      final tagEntry = _tags.entries.elementAt(index);
-                      final tag = tagEntry.key;
-                      final count = tagEntry.value;
+                        final recipe = _recommendedTagRecipes[index];
 
-                      return GestureDetector(
-                        onTap: () {
-                          // Handle onTap event
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const TagScreen(
-                                  // Pass tag information if needed
-
-                                  ),
-                            ),
-                          );
-                        },
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 50,
-                              height: 50, // Set fixed height for consistency
-                              decoration: BoxDecoration(
-                                color:
-                                    const Color(0xFFDED8DC).withOpacity(0.61),
-                                borderRadius: BorderRadius.circular(16.0),
+                        return Container(
+                          margin: const EdgeInsets.only(
+                              right: 8.0), // Space between items
+                          width: 150, // Adjust width as needed
+                          child: GestureDetector(
+                            onTap: () {
+                              // Handle onTap event
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => DishScreen(
+                                          recipeData: recipe,
+                                        )),
+                              );
+                            },
+                            child: Card(
+                              elevation:
+                                  4.0, // Add elevation for card-like appearance
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                    12.0), // Rounded corners
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      height: 80, // Adjust height as needed
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[200],
+                                        borderRadius: BorderRadius.circular(
+                                            12.0), // Rounded corners
+                                      ),
+                                      child: const Center(
+                                        child: Icon(Icons.fastfood,
+                                            size: 40,
+                                            color: Colors
+                                                .grey), // Placeholder for image
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8.0),
+                                    Text(
+                                      (recipe['name'] ?? '')
+                                          .toUpperCase(), // Convert text to uppercase
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black,
+                                      ),
+                                      overflow: TextOverflow
+                                          .ellipsis, // Prevent text overflow
+                                    ),
+                                    const SizedBox(height: 4.0),
+                                    Text(
+                                      'Rating: ${recipe['rating'] ?? ''}',
+                                      style: const TextStyle(
+                                        color: Colors.black,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            const SizedBox(
-                                width: 8.0), // Space between icon and text
-                            Flexible(
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Divider(
+              thickness: 1,
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              'Recipe Recommendation',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _ingredientController,
+                  decoration: InputDecoration(
+                    labelText: 'Enter Ingredient',
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.add),
+                      color: const Color(0xFFD0AD6D), // Set icon color to brown
+                      onPressed: _addIngredient,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(12), // Set border radius
+                      borderSide: const BorderSide(
+                          color: Colors.grey), // Set border color
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFD0AD6D)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16.0),
+                Wrap(
+                  spacing: 8.0,
+                  children: _ingredients
+                      .map((ingredient) => Chip(
+                            label: Text(ingredient),
+                            backgroundColor: const Color(
+                                0xFFD0AD6D), // Optional: set background color
+                            deleteIcon: const Icon(Icons.remove_circle_outline,
+                                color: Colors.white), // Delete icon
+                            onDeleted: () =>
+                                _removeIngredient(ingredient), // Handle delete
+                          ))
+                      .toList(),
+                ),
+                const SizedBox(height: 16.0),
+                SizedBox(
+                  width: double
+                      .infinity, // Make the container expand to full width
+                  child: ElevatedButton(
+                    onPressed: _getRecommendations,
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(
+                          0xFF83ABD1), // Set background color to blue
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(12), // Set border radius
+                      ),
+                    ),
+                    child: const Text('Get Recommendations'),
+                  ),
+                ),
+                const SizedBox(height: 16.0),
+                SizedBox(
+                  height: 200, // Increased height for more space
+                  child: ListView.builder(
+                    scrollDirection:
+                        Axis.horizontal, // Enable horizontal scrolling
+                    itemCount: _recommendations.length,
+                    itemBuilder: (context, index) {
+                      final recommendation = _recommendations[index];
+                      return Container(
+                        width: 200, // Set a fixed width for each item
+                        margin: const EdgeInsets.only(
+                            right: 8.0), // Add space between items
+                        child: Card(
+                          elevation: 5, // Set elevation for the card effect
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(12), // Set border radius
+                          ),
+                          child: Padding(
+                              padding: const EdgeInsets.all(8.0),
                               child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '$count Recipes', // Use count from tags
+                                    (recommendation['name'] ?? '')
+                                        .toUpperCase(), // Convert text to uppercase
                                     style: const TextStyle(
-                                      color: Color(0xFF628093),
-                                      fontSize: 12,
-                                      overflow: TextOverflow.ellipsis,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors
+                                          .black, // Set text color to black
+                                    ),
+                                    overflow: TextOverflow
+                                        .ellipsis, // Prevent text overflow
+                                  ),
+                                  const SizedBox(height: 24.0),
+                                  RichText(
+                                    text: TextSpan(
+                                      style: const TextStyle(
+                                          color: Colors.black), // Text color
+                                      children: [
+                                        const TextSpan(
+                                          text: 'Rating: ',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                        TextSpan(
+                                          text:
+                                              '${recommendation['rating'] ?? ''}',
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  Text(
-                                    tag, // Use tag from tags
-                                    style: const TextStyle(
-                                      fontSize: 16.0,
-                                      color: Color(0xFF333333),
-                                      fontWeight: FontWeight.bold,
-                                      overflow: TextOverflow.ellipsis,
+                                  const SizedBox(height: 8.0),
+                                  RichText(
+                                    text: TextSpan(
+                                      style: const TextStyle(
+                                          color: Colors.black), // Text color
+                                      children: [
+                                        const TextSpan(
+                                          text: 'Protein: ',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                        TextSpan(
+                                          text:
+                                              '${recommendation['protein (PDV)'] ?? ''}',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4.0),
+                                  RichText(
+                                    text: TextSpan(
+                                      style: const TextStyle(
+                                          color: Colors.black), // Text color
+                                      children: [
+                                        const TextSpan(
+                                          text: 'Fat: ',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                        TextSpan(
+                                          text:
+                                              '${recommendation['total fat (PDV)'] ?? ''}',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4.0),
+                                  RichText(
+                                    text: TextSpan(
+                                      style: const TextStyle(
+                                          color: Colors.black), // Text color
+                                      children: [
+                                        const TextSpan(
+                                          text: 'Calories: ',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                        TextSpan(
+                                          text:
+                                              '${recommendation['calories'] ?? ''}',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4.0),
+                                  RichText(
+                                    text: TextSpan(
+                                      style: const TextStyle(
+                                          color: Colors.black), // Text color
+                                      children: [
+                                        const TextSpan(
+                                          text: 'Carbs: ',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                        TextSpan(
+                                          text:
+                                              '${recommendation['carbohydrates (PDV)'] ?? ''}',
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
-                              ),
-                            ),
-                          ],
+                              )),
                         ),
                       );
                     },
-                    itemCount: _tags
-                        .length, // Ensure this is the length of the tags map
                   ),
-          )
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
