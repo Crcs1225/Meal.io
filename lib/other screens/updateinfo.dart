@@ -1,6 +1,11 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img;
 import 'package:lottie/lottie.dart';
 
 class UpdateProfileScreen extends StatefulWidget {
@@ -16,6 +21,7 @@ class UpdateProfileScreenState extends State<UpdateProfileScreen> {
   final TextEditingController _weightController = TextEditingController();
   final TextEditingController _heightController = TextEditingController();
   DateTime? _selectedBirthday;
+  File? _selectedImage;
 
   @override
   void initState() {
@@ -36,6 +42,30 @@ class UpdateProfileScreenState extends State<UpdateProfileScreen> {
         _selectedBirthday = pickedDate;
       });
     }
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      setState(() {
+        _selectedImage = File(pickedFile.path);
+      });
+    }
+  }
+
+  Future<Uint8List?> _resizeAndCompressImage(File imageFile) async {
+    // Load the image using the 'image' package
+    final image = img.decodeImage(await imageFile.readAsBytes());
+
+    if (image == null) return null;
+
+    // Resize the image to a maximum width of 300 pixels
+    final resizedImage = img.copyResize(image, width: 300);
+
+    // Compress the image and get the bytes in JPEG format
+    return Uint8List.fromList(img.encodeJpg(resizedImage, quality: 85));
   }
 
   Future<void> _updateProfile() async {
@@ -82,6 +112,22 @@ class UpdateProfileScreenState extends State<UpdateProfileScreen> {
         updateData['height'] = double.tryParse(_heightController.text) ?? 0.0;
       }
 
+      // Upload the profile picture if a new one is selected
+      if (_selectedImage != null) {
+        Uint8List? compressedImage =
+            await _resizeAndCompressImage(_selectedImage!);
+
+        if (compressedImage != null) {
+          // Save the compressed image to Firebase Storage
+          String storagePath = 'users/$userId/profile.jpg';
+          final storageRef = FirebaseStorage.instance.ref().child(storagePath);
+          final uploadTask = await storageRef.putData(compressedImage);
+          final imageUrl = await uploadTask.ref.getDownloadURL();
+
+          updateData['profilePicture'] = imageUrl;
+        }
+      }
+
       if (updateData.isNotEmpty) {
         await FirebaseFirestore.instance
             .collection('users')
@@ -93,14 +139,14 @@ class UpdateProfileScreenState extends State<UpdateProfileScreen> {
         Navigator.of(context).pop();
       } // Dismiss the loading dialog
 
-      // Clear text fields after updating
+      // Clear text fields and image after updating
       setState(() {
         _nameController.clear();
         _emailController.clear();
         _weightController.clear();
-
         _heightController.clear();
-        _selectedBirthday = null; // Reset the birthday field
+        _selectedBirthday = null;
+        _selectedImage = null;
       });
     } catch (e) {
       if (mounted) {
@@ -122,6 +168,20 @@ class UpdateProfileScreenState extends State<UpdateProfileScreen> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
+              GestureDetector(
+                onTap: _pickImage,
+                child: CircleAvatar(
+                  radius: 60,
+                  backgroundColor: Colors.grey.shade300,
+                  backgroundImage: _selectedImage != null
+                      ? FileImage(_selectedImage!)
+                      : null,
+                  child: _selectedImage == null
+                      ? const Icon(Icons.camera_alt, size: 40)
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 16),
               _buildTextField(
                 controller: _nameController,
                 label: 'Name',

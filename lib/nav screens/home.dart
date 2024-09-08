@@ -15,12 +15,13 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  List<DocumentSnapshot> _searchResults = [];
+  List<dynamic> _results = [];
+  String _query = '';
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _topRecipes = [];
   bool _isLoading = true;
   bool _isLoadingrec = false;
-  String ip = 'http://192.168.100.3:5000';
+  String ip = 'http://192.168.0.114:5000';
   String userId = "";
   final TextEditingController _ingredientController = TextEditingController();
   final List<String> _ingredients = [];
@@ -67,27 +68,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   // Search function querying Firestore
-  void _searchRecipes(String query) async {
-    if (query.isNotEmpty) {
-      QuerySnapshot result = await FirebaseFirestore.instance
-          .collection('recipe')
-          .orderBy('name')
-          .startAt([query])
-          .endAt(['$query\uf8ff'])
-          .limit(5)
-          .get();
-
-      if (mounted) {
-        setState(() {
-          _searchResults = result.docs;
-        });
-      }
-    } else {
-      if (mounted) {
-        setState(() {
-          _searchResults.clear();
-        });
-      }
+  Future<void> _searchRecipes(String query) async {
+    final response = await http.get(Uri.parse('$ip/search?query=$query'));
+    if (response.statusCode == 200) {
+      setState(() {
+        _results = json.decode(response.body);
+      });
     }
   }
 
@@ -97,6 +83,9 @@ class _HomePageState extends State<HomePage> {
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _query = query;
+      });
       _searchRecipes(query);
     });
   }
@@ -287,7 +276,7 @@ class _HomePageState extends State<HomePage> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
             child: Text(
-              'Meal.io',
+              'Kitchen Helper',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24.0),
             ),
           ),
@@ -301,15 +290,36 @@ class _HomePageState extends State<HomePage> {
                   borderRadius: BorderRadius.circular(16.0),
                 ),
                 child: TextField(
-                  onChanged: _onSearchChanged,
+                  onChanged: (value) {
+                    _onSearchChanged(value); // Your search logic
+                    if (value.isEmpty) {
+                      setState(() {
+                        _results
+                            .clear(); // Clear results when the input is empty
+                      });
+                    }
+                  },
                   controller: _searchController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Search Recipes',
-                    hintStyle: TextStyle(color: Color(0xFF9F9B98)),
-                    prefixIcon: Icon(Icons.search, color: Color(0xFF9F9B98)),
+                    hintStyle: const TextStyle(color: Color(0xFF9F9B98)),
+                    prefixIcon:
+                        const Icon(Icons.search, color: Color(0xFF9F9B98)),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear,
+                                color: Color(0xFF9F9B98)),
+                            onPressed: () {
+                              setState(() {
+                                _searchController.clear(); // Clear the input
+                                _results.clear(); // Clear the search results
+                              });
+                            },
+                          )
+                        : null, // Show clear button only when there's input
                     border: InputBorder.none,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 16.0),
                   ),
                   style: const TextStyle(color: Color(0xFF9F9B98)),
                 ),
@@ -317,20 +327,17 @@ class _HomePageState extends State<HomePage> {
               Flexible(
                 child: ListView.builder(
                   shrinkWrap: true,
-                  itemCount: _searchResults.length,
+                  itemCount: _results.length,
                   itemBuilder: (context, index) {
-                    var recipe =
-                        _searchResults[index].data() as Map<String, dynamic>;
-
                     return ListTile(
-                      title: Text(recipe['name']),
+                      title: Text(_results[index]['name']),
                       onTap: () {
                         // Handle the selection of a recipe.
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => DishScreen(
-                              recipeData: recipe,
+                              recipeData: _results[index],
                             ),
                           ),
                         );
