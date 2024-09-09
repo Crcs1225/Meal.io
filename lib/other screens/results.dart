@@ -15,7 +15,7 @@ class Results extends StatefulWidget {
 class _ResultsState extends State<Results> {
   bool _loading = false;
   List<dynamic> _recommendations = [];
-  String ip = 'http://192.168.100.3:5000';
+  String ip = 'http://172.20.10.2:5000';
 
   Future<void> _sendIngredients() async {
     setState(() {

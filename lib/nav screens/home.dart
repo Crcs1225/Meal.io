@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../other screens/popular.dart';
+import 'package:meal_planner/other%20screens/tags.dart';
 import '../other screens/dish.dart';
 
 class HomePage extends StatefulWidget {
@@ -16,32 +16,114 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   List<dynamic> _results = [];
-  String _query = '';
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _topRecipes = [];
   bool _isLoading = true;
   bool _isLoadingrec = false;
-  String ip = 'http://192.168.0.114:5000';
+  String ip = 'http://192.168.1.237:5000';
   String userId = "";
+  //controller for tags and ingredients
   final TextEditingController _ingredientController = TextEditingController();
   final List<String> _ingredients = [];
+  List _tags = [];
+  //handles the recommendation list
   List _recommendations = [];
   List _recommendedTagRecipes = [];
   List<String> _selectedTags = [];
+  // Tracks which recommendation type is currently visible
+  bool _showIngredientRecommendation = false;
+  bool _showTagRecommendation = false;
+  List<String> selectedPreferences = [];
+  List<String> allPreferences = [];
+  List<String> displayedPreferences = [];
+  bool isLoading = true;
+  final TextEditingController searchController = TextEditingController();
 
   //add ingredients to the list
   void _addIngredient() {
     setState(() {
-      _ingredients.add(_ingredientController.text);
-      _ingredientController.clear();
+      if (_ingredientController.text.isNotEmpty) {
+        _ingredients.add(_ingredientController.text);
+        _ingredientController.clear();
+      }
     });
   }
 
-  //remove items in the list of ingredient
+  // Remove ingredient from the list
   void _removeIngredient(String ingredient) {
     setState(() {
       _ingredients.remove(ingredient);
     });
+  }
+
+  // Toggle ingredient-based recommendation view
+  void _toggleIngredientRecommendation() {
+    setState(() {
+      _showIngredientRecommendation = !_showIngredientRecommendation;
+      if (_showIngredientRecommendation) {
+        // Show ingredient recommendation, hide tag recommendation
+        _showTagRecommendation = false;
+        _recommendations.clear(); // Clear previous recommendations
+      } else {
+        // Close ingredient recommendation
+        _recommendations.clear(); // Clear recommendations when closed
+      }
+    });
+  }
+
+  // Toggle tag-based recommendation view
+  void _toggleTagRecommendation() {
+    setState(() {
+      _showTagRecommendation = !_showTagRecommendation;
+      if (_showTagRecommendation) {
+        // Show tag recommendation, hide ingredient recommendation
+        _showIngredientRecommendation = false;
+        _tags.clear(); // Clear previous recommendations
+      } else {
+        // Close tag recommendation
+        _tags.clear(); // Clear recommendations when closed
+      }
+    });
+  }
+
+  void _handleSearchInput(String value) {
+    if (value.isEmpty) {
+      // Show the initial 10 preferences when search input is empty
+      setState(() {
+        displayedPreferences = allPreferences.take(3).toList();
+      });
+    } else {
+      // Filter all preferences based on search input
+      final filtered = allPreferences
+          .where((preference) =>
+              preference.toLowerCase().contains(value.toLowerCase()))
+          .toList();
+      // Show all related preferences from the full list
+      setState(() {
+        displayedPreferences = filtered;
+      });
+    }
+  }
+
+  Future<void> _loadPreferences() async {
+    try {
+      final snapshot =
+          await FirebaseFirestore.instance.collection('tags').get();
+      final preferences =
+          snapshot.docs.map((doc) => doc['tag'] as String).toList();
+
+      setState(() {
+        allPreferences = preferences;
+        // Initially display only the first 10 preferences
+        displayedPreferences = preferences.take(3).toList();
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error fetching preferences: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   //posr request for ingredient recommendation
@@ -83,9 +165,7 @@ class _HomePageState extends State<HomePage> {
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      setState(() {
-        _query = query;
-      });
+      setState(() {});
       _searchRecipes(query);
     });
   }
@@ -188,7 +268,7 @@ class _HomePageState extends State<HomePage> {
         headers: {"Content-Type": "application/json"},
         body: json.encode({
           'input_tags': _selectedTags,
-          'num_similar': 5,
+          'num_similar': 3,
         }),
       );
 
@@ -196,6 +276,44 @@ class _HomePageState extends State<HomePage> {
         final List<dynamic> responseBody = jsonDecode(response.body);
         setState(() {
           _recommendedTagRecipes = responseBody.cast<Map<String, dynamic>>();
+          _isLoading = false;
+        });
+      } else {
+        print(
+            'Failed to get tag-based recommendations. Status code: ${response.statusCode}');
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching tag-based recommendations: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _TagBasedRecommendations() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final url = Uri.parse('$ip/tag-based');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          'input_tags': selectedPreferences,
+          'num_similar': 5,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> responseBody = jsonDecode(response.body);
+        setState(() {
+          _tags = responseBody.cast<Map<String, dynamic>>();
           _isLoading = false;
         });
       } else {
@@ -259,6 +377,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _loadTopRecipes();
     _fetchUserPreferences();
+    _loadPreferences();
   }
 
   @override
@@ -330,7 +449,14 @@ class _HomePageState extends State<HomePage> {
                   itemCount: _results.length,
                   itemBuilder: (context, index) {
                     return ListTile(
-                      title: Text(_results[index]['name']),
+                      leading:
+                          Icon(Icons.search), // Add a search icon at the start
+                      title: Text(
+                        _results[index]['name'],
+                        style: TextStyle(fontSize: 14), // Make the text smaller
+                      ),
+                      trailing: Icon(Icons
+                          .arrow_forward_ios), // Add a right arrow at the end
                       onTap: () {
                         // Handle the selection of a recipe.
                         Navigator.push(
@@ -354,34 +480,118 @@ class _HomePageState extends State<HomePage> {
               thickness: 1,
             ),
           ),
+          //here
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Recipes You May Like',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const PopularListScreen()),
-                    );
-                  },
-                  child: const Text(
-                    'View all',
-                    style: TextStyle(
-                      decoration: TextDecoration.underline,
-                      fontSize: 12,
-                      color: Color(0xFFD0AD6D),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Expanded(
+                      child: Card(
+                        elevation: 4.0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
+                        child: InkWell(
+                          onTap: _toggleIngredientRecommendation,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _showIngredientRecommendation
+                                      ? Icons.close
+                                      : Icons.apple,
+                                  size: 24,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(height: 8.0),
+                                Text(
+                                  _showIngredientRecommendation
+                                      ? 'Close Ingredients'
+                                      : 'Ingredients',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                  ),
+                                  overflow: TextOverflow.visible,
+                                ),
+                              ],
+                            ),
+                          ),
+                          splashColor: Colors.transparent,
+                        ),
+                        color: _showIngredientRecommendation
+                            ? Color(0xFFD0AD6D)
+                            : const Color(0xFF83ABD1),
+                      ),
                     ),
-                  ),
-                )
+                    const SizedBox(width: 8.0),
+                    Expanded(
+                      child: Card(
+                        elevation: 4.0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
+                        child: InkWell(
+                          onTap: _toggleTagRecommendation,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _showTagRecommendation
+                                      ? Icons.close
+                                      : Icons.label_outline,
+                                  size: 24,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(height: 8.0),
+                                Text(
+                                  _showTagRecommendation
+                                      ? 'Close Tags'
+                                      : 'Tags',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                  ),
+                                  overflow: TextOverflow.visible,
+                                ),
+                              ],
+                            ),
+                          ),
+                          splashColor: Colors.transparent,
+                        ),
+                        color: _showTagRecommendation
+                            ? Color(0xFFD0AD6D)
+                            : const Color(0xFF83ABD1),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16.0),
+                if (_showIngredientRecommendation)
+                  _buildIngredientRecommendation(),
+                if (_showTagRecommendation) _buildTagRecommendation(),
               ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Divider(
+              thickness: 1,
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              'Recipes You May Like',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
           Padding(
@@ -490,7 +700,7 @@ class _HomePageState extends State<HomePage> {
               thickness: 1,
             ),
           ),
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -499,12 +709,23 @@ class _HomePageState extends State<HomePage> {
                   'Based on User Preferences',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                Text(
-                  'View all',
-                  style: TextStyle(
-                    decoration: TextDecoration.underline,
-                    fontSize: 12,
-                    color: Color(0xFFD0AD6D),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => TagScreen(
+                                preferences: _selectedTags,
+                              )),
+                    );
+                  },
+                  child: Text(
+                    'View all',
+                    style: TextStyle(
+                      decoration: TextDecoration.underline,
+                      fontSize: 12,
+                      color: Color(0xFFD0AD6D),
+                    ),
                   ),
                 ),
               ],
@@ -600,214 +821,279 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0),
-            child: Divider(
-              thickness: 1,
+        ],
+      ),
+    );
+  }
+
+  // Widget for ingredient-based recommendation UI
+  Widget _buildIngredientRecommendation() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Recipe Recommendation (By Ingredient)',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8.0),
+        TextField(
+          controller: _ingredientController,
+          decoration: InputDecoration(
+            labelText: 'Enter Ingredient',
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.add),
+              color: const Color(0xFFD0AD6D),
+              onPressed: _addIngredient,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.grey),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFD0AD6D)),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(
-              'Recipe Recommendation',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16.0),
+        Wrap(
+          spacing: 8.0,
+          children: _ingredients
+              .map((ingredient) => Chip(
+                    label: Text(ingredient),
+                    backgroundColor: const Color(0xFFD0AD6D),
+                    deleteIcon: const Icon(Icons.remove_circle_outline,
+                        color: Colors.white),
+                    onDeleted: () => _removeIngredient(ingredient),
+                  ))
+              .toList(),
+        ),
+        const SizedBox(height: 16.0),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _getRecommendations,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF83ABD1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'Get Recommendations',
+              style: TextStyle(color: Colors.white),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: _ingredientController,
-                  decoration: InputDecoration(
-                    labelText: 'Enter Ingredient',
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.add),
-                      color: const Color(0xFFD0AD6D), // Set icon color to brown
-                      onPressed: _addIngredient,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius:
-                          BorderRadius.circular(12), // Set border radius
-                      borderSide: const BorderSide(
-                          color: Colors.grey), // Set border color
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFD0AD6D)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16.0),
-                Wrap(
-                  spacing: 8.0,
-                  children: _ingredients
-                      .map((ingredient) => Chip(
-                            label: Text(ingredient),
-                            backgroundColor: const Color(
-                                0xFFD0AD6D), // Optional: set background color
-                            deleteIcon: const Icon(Icons.remove_circle_outline,
-                                color: Colors.white), // Delete icon
-                            onDeleted: () =>
-                                _removeIngredient(ingredient), // Handle delete
-                          ))
-                      .toList(),
-                ),
-                const SizedBox(height: 16.0),
-                SizedBox(
-                  width: double
-                      .infinity, // Make the container expand to full width
-                  child: ElevatedButton(
-                    onPressed: _getRecommendations,
-                    style: ElevatedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      backgroundColor: const Color(
-                          0xFF83ABD1), // Set background color to blue
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(12), // Set border radius
+        ),
+        const SizedBox(height: 16.0),
+        _buildRecommendationListIngredients(),
+      ],
+    );
+  }
+
+  // Widget for tag-based recommendation UI
+  Widget _buildTagRecommendation() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Recipe Recommendation (By Tag)',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8.0),
+        TextField(
+          controller: searchController,
+          decoration: const InputDecoration(
+            labelText: 'Search Tags',
+            border: OutlineInputBorder(),
+          ),
+          onChanged: _handleSearchInput,
+        ),
+        const SizedBox(height: 16.0),
+        Wrap(
+          spacing: 8.0,
+          runSpacing: 4.0,
+          children: displayedPreferences.map((preference) {
+            return ChoiceChip(
+              label: Text(preference),
+              selected: selectedPreferences.contains(preference),
+              selectedColor: Colors.blueAccent,
+              onSelected: (bool selected) {
+                setState(() {
+                  if (selected) {
+                    selectedPreferences.add(preference);
+                  } else {
+                    selectedPreferences.remove(preference);
+                  }
+                });
+              },
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 24.0),
+        const Text(
+          'Selected Tags:',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        Wrap(
+          spacing: 8.0,
+          runSpacing: 4.0,
+          children: selectedPreferences.map((preference) {
+            return _buildPreference(preference);
+          }).toList(),
+        ),
+        const SizedBox(height: 16.0),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _TagBasedRecommendations,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF83ABD1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Get Recommendations',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ),
+        const SizedBox(height: 16.0),
+        _buildRecommendationListTags(),
+      ],
+    );
+  }
+
+  // Widget to display the recommendation list
+  Widget _buildRecommendationListIngredients() {
+    return SizedBox(
+      height: 200,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _recommendations.length,
+        itemBuilder: (context, index) {
+          final recommendation = _recommendations[index];
+          return Container(
+            width: 200,
+            margin: const EdgeInsets.only(right: 16.0),
+            child: Card(
+              elevation: 4.0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      recommendation['name'] ?? 'Recipe Name',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16.0,
                       ),
                     ),
-                    child: const Text('Get Recommendations'),
-                  ),
+                    const SizedBox(height: 8.0),
+                    Text(
+                      recommendation['description'] ?? 'Description',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8.0),
+                    Text(
+                      'Rating: ${recommendation['rating'] ?? 'N/A'}',
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16.0),
-                SizedBox(
-                  height: 200, // Increased height for more space
-                  child: ListView.builder(
-                    scrollDirection:
-                        Axis.horizontal, // Enable horizontal scrolling
-                    itemCount: _recommendations.length,
-                    itemBuilder: (context, index) {
-                      final recommendation = _recommendations[index];
-                      return Container(
-                        width: 200, // Set a fixed width for each item
-                        margin: const EdgeInsets.only(
-                            right: 8.0), // Add space between items
-                        child: Card(
-                          elevation: 5, // Set elevation for the card effect
-                          shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(12), // Set border radius
-                          ),
-                          child: Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    (recommendation['name'] ?? '')
-                                        .toUpperCase(), // Convert text to uppercase
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors
-                                          .black, // Set text color to black
-                                    ),
-                                    overflow: TextOverflow
-                                        .ellipsis, // Prevent text overflow
-                                  ),
-                                  const SizedBox(height: 24.0),
-                                  RichText(
-                                    text: TextSpan(
-                                      style: const TextStyle(
-                                          color: Colors.black), // Text color
-                                      children: [
-                                        const TextSpan(
-                                          text: 'Rating: ',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                        TextSpan(
-                                          text:
-                                              '${recommendation['rating'] ?? ''}',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8.0),
-                                  RichText(
-                                    text: TextSpan(
-                                      style: const TextStyle(
-                                          color: Colors.black), // Text color
-                                      children: [
-                                        const TextSpan(
-                                          text: 'Protein: ',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                        TextSpan(
-                                          text:
-                                              '${recommendation['protein (PDV)'] ?? ''}',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4.0),
-                                  RichText(
-                                    text: TextSpan(
-                                      style: const TextStyle(
-                                          color: Colors.black), // Text color
-                                      children: [
-                                        const TextSpan(
-                                          text: 'Fat: ',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                        TextSpan(
-                                          text:
-                                              '${recommendation['total fat (PDV)'] ?? ''}',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4.0),
-                                  RichText(
-                                    text: TextSpan(
-                                      style: const TextStyle(
-                                          color: Colors.black), // Text color
-                                      children: [
-                                        const TextSpan(
-                                          text: 'Calories: ',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                        TextSpan(
-                                          text:
-                                              '${recommendation['calories'] ?? ''}',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4.0),
-                                  RichText(
-                                    text: TextSpan(
-                                      style: const TextStyle(
-                                          color: Colors.black), // Text color
-                                      children: [
-                                        const TextSpan(
-                                          text: 'Carbs: ',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                        TextSpan(
-                                          text:
-                                              '${recommendation['carbohydrates (PDV)'] ?? ''}',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              )),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPreference(String text) {
+    return Chip(
+      label: Text(text),
+      backgroundColor: const Color(0xFFD0AD6D),
+    );
+  }
+
+  // Widget to display the recommendation list
+  Widget _buildRecommendationListTags() {
+    return SizedBox(
+      height: 200,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _tags.length,
+        itemBuilder: (context, index) {
+          final recommendation = _tags[index];
+          return Container(
+            width: 200,
+            margin: const EdgeInsets.only(right: 16.0),
+            child: GestureDetector(
+              onTap: () {
+                // Handle onTap event
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => DishScreen(
+                            recipeData: recommendation,
+                          )),
+                );
+              },
+              child: Card(
+                elevation: 4.0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: 100, // Adjust height as needed
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.fastfood,
+                            size: 40,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8.0),
+                      Text(
+                        (recommendation['name'] ?? '').toUpperCase(),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4.0),
+                      Text(
+                        'Rating: ${(recommendation['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                        style: const TextStyle(
+                          color: Colors.black,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

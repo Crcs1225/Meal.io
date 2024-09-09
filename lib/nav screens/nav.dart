@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'home.dart';
+import 'newrecipe.dart';
 import 'scan.dart';
 import 'profile.dart';
 
@@ -17,6 +18,7 @@ class _NavigationState extends State<Navigation> {
   final List<Widget> _children = [
     const HomePage(),
     const DetectPage(),
+    const NewRecipe(),
     const ProfilePage(),
   ];
 
@@ -43,6 +45,10 @@ class _NavigationState extends State<Navigation> {
           BottomNavigationBarItem(
             icon: Icon(Ionicons.scan),
             label: 'Scan',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Ionicons.add_circle_sharp),
+            label: 'New Recipe',
           ),
           BottomNavigationBarItem(
             icon: Icon(Ionicons.person),
