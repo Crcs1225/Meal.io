@@ -1,6 +1,6 @@
 class Config {
   //master ip
-  static const String master = 'http://192.168.1.237:5000';
+  static const String masters = 'http://192.168.1.237:5000';
   // Change this URL as needed
   static const String serverUpload = '$master/upload';
   static const String ingredient = '$master/ingredient-based';
