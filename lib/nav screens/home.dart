@@ -449,14 +449,17 @@ class _HomePageState extends State<HomePage> {
                   itemCount: _results.length,
                   itemBuilder: (context, index) {
                     return ListTile(
-                      leading:
-                          Icon(Icons.search), // Add a search icon at the start
+                      leading: const Icon(
+                          Icons.search), // Add a search icon at the start
                       title: Text(
                         _results[index]['name'],
-                        style: TextStyle(fontSize: 14), // Make the text smaller
+                        style: const TextStyle(
+                            fontSize: 14), // Make the text smaller
                       ),
-                      trailing: Icon(Icons
-                          .arrow_forward_ios), // Add a right arrow at the end
+                      trailing: const Icon(
+                        Icons.arrow_forward_ios,
+                        size: 14,
+                      ), // Add a right arrow at the end
                       onTap: () {
                         // Handle the selection of a recipe.
                         Navigator.push(
@@ -495,8 +498,12 @@ class _HomePageState extends State<HomePage> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8.0),
                         ),
+                        color: _showIngredientRecommendation
+                            ? const Color(0xFFD0AD6D)
+                            : const Color(0xFF83ABD1),
                         child: InkWell(
                           onTap: _toggleIngredientRecommendation,
+                          splashColor: Colors.transparent,
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Column(
@@ -515,7 +522,7 @@ class _HomePageState extends State<HomePage> {
                                       ? 'Close Ingredients'
                                       : 'Ingredients',
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     color: Colors.white,
                                   ),
                                   overflow: TextOverflow.visible,
@@ -523,11 +530,7 @@ class _HomePageState extends State<HomePage> {
                               ],
                             ),
                           ),
-                          splashColor: Colors.transparent,
                         ),
-                        color: _showIngredientRecommendation
-                            ? Color(0xFFD0AD6D)
-                            : const Color(0xFF83ABD1),
                       ),
                     ),
                     const SizedBox(width: 8.0),
@@ -537,8 +540,12 @@ class _HomePageState extends State<HomePage> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8.0),
                         ),
+                        color: _showTagRecommendation
+                            ? const Color(0xFFD0AD6D)
+                            : const Color(0xFF83ABD1),
                         child: InkWell(
                           onTap: _toggleTagRecommendation,
+                          splashColor: Colors.transparent,
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Column(
@@ -557,7 +564,7 @@ class _HomePageState extends State<HomePage> {
                                       ? 'Close Tags'
                                       : 'Tags',
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     color: Colors.white,
                                   ),
                                   overflow: TextOverflow.visible,
@@ -565,11 +572,7 @@ class _HomePageState extends State<HomePage> {
                               ],
                             ),
                           ),
-                          splashColor: Colors.transparent,
                         ),
-                        color: _showTagRecommendation
-                            ? Color(0xFFD0AD6D)
-                            : const Color(0xFF83ABD1),
                       ),
                     ),
                   ],
@@ -701,11 +704,11 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
+                const Text(
                   'Based on User Preferences',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
@@ -719,7 +722,7 @@ class _HomePageState extends State<HomePage> {
                               )),
                     );
                   },
-                  child: Text(
+                  child: const Text(
                     'View all',
                     style: TextStyle(
                       decoration: TextDecoration.underline,
