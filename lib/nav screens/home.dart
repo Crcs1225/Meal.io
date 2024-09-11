@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:meal_planner/other%20screens/tags.dart';
 import '../other screens/dish.dart';
+import '../utility/config.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -129,7 +130,7 @@ class _HomePageState extends State<HomePage> {
   //posr request for ingredient recommendation
   void _getRecommendations() async {
     final url =
-        Uri.parse('$ip/ingredient-based'); // Replace with your Flask server URL
+        Uri.parse(Config.ingredient); // Replace with your Flask server URL
     final response = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
@@ -151,7 +152,8 @@ class _HomePageState extends State<HomePage> {
 
   // Search function querying Firestore
   Future<void> _searchRecipes(String query) async {
-    final response = await http.get(Uri.parse('$ip/search?query=$query'));
+    final response =
+        await http.get(Uri.parse('${Config.master}/search?query=$query'));
     if (response.statusCode == 200) {
       setState(() {
         _results = json.decode(response.body);
@@ -220,7 +222,7 @@ class _HomePageState extends State<HomePage> {
 
       if (userId != null) {
         final response = await http.post(
-          Uri.parse('$ip/you-may-like'),
+          Uri.parse(Config.youmaylike),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'user_id': userId}),
         );
@@ -260,7 +262,7 @@ class _HomePageState extends State<HomePage> {
       _isLoading = true;
     });
 
-    final url = Uri.parse('$ip/tag-based');
+    final url = Uri.parse(Config.tag);
 
     try {
       final response = await http.post(
