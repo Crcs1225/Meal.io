@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:meal_planner/other%20screens/dish.dart';
+import '../utility/config.dart';
 
 class Results extends StatefulWidget {
   final List<String> ingredients;
@@ -15,7 +18,43 @@ class Results extends StatefulWidget {
 class _ResultsState extends State<Results> {
   bool _loading = false;
   List<dynamic> _recommendations = [];
-  String ip = 'http://172.20.10.2:5000';
+
+  Future<String?> _fetchUserId() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+
+      if (currentUser == null) {
+        print('No user is currently signed in.');
+        return null;
+      }
+
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      if (userDoc.exists) {
+        Map<String, dynamic>? userData =
+            userDoc.data() as Map<String, dynamic>?;
+        if (userData != null) {
+          String? userId = userData['user_id'] as String?;
+          if (userId != null) {
+            print('Fetched user ID: $userId');
+            return userId;
+          } else {
+            print('Field "user_id" is missing or is not a string.');
+          }
+        } else {
+          print('User document data is null.');
+        }
+      } else {
+        print('User document not found.');
+      }
+    } catch (e) {
+      print('Error fetching user ID: $e');
+    }
+    return null;
+  }
 
   Future<void> _sendIngredients() async {
     setState(() {
@@ -23,11 +62,12 @@ class _ResultsState extends State<Results> {
     });
 
     final url =
-        Uri.parse('$ip/ingredient-based'); // Replace with your Flask server URL
+        Uri.parse(Config.ingredient); // Replace with your Flask server URL
     final headers = {'Content-Type': 'application/json'};
+    String? userId = await _fetchUserId();
     final body = jsonEncode({
-      'input_ingredients': widget.ingredients,
-      'num_similar': 5, // Customize this as needed
+      'ingredients': widget.ingredients,
+      'user_id': userId,
     });
 
     try {
@@ -68,21 +108,33 @@ class _ResultsState extends State<Results> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-            ...widget.ingredients.map((ingredient) => Text(ingredient)),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3, // Number of columns in the grid
+                childAspectRatio:
+                    3, // Aspect ratio of each item to adjust height
+                mainAxisSpacing: 8, // Vertical space between items
+                crossAxisSpacing: 8, // Horizontal space between items
+              ),
+              itemCount: widget.ingredients.length,
+              itemBuilder: (context, index) {
+                return buildScannedIngredient(widget.ingredients[index]);
+              },
+            ),
             const SizedBox(height: 20),
             Center(
               child: ElevatedButton(
                 onPressed: _loading ? null : _sendIngredients,
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  backgroundColor:
-                      const Color(0xFF83ABD1), // Text color of the button
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 16.0), // Adjust the height here
+                  backgroundColor: const Color(0xFF83ABD1),
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
                   minimumSize: const Size(double.infinity, 48),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.0), // Border radius
-                  ), // Full width and fixed height
+                    borderRadius: BorderRadius.circular(12.0),
+                  ),
                 ),
                 child: _loading
                     ? const CircularProgressIndicator(
@@ -95,55 +147,82 @@ class _ResultsState extends State<Results> {
             _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _recommendations.isNotEmpty
-                    ? Column(
-                        children: _recommendations.map((recommendation) {
-                          return Container(
-                            margin: const EdgeInsets.symmetric(vertical: 8.0),
-                            decoration: BoxDecoration(
-                              color: Colors
-                                  .white, // Background color of each list item
-                              borderRadius:
-                                  BorderRadius.circular(12.0), // Border radius
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.2),
-                                  spreadRadius: 2,
-                                  blurRadius: 5,
-                                  offset: const Offset(0, 3), // Shadow position
+                    ? GridView.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 8.0,
+                          mainAxisSpacing: 8.0,
+                          childAspectRatio: 0.8,
+                        ),
+                        itemCount: _recommendations.length,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          final dish = _recommendations[index];
+                          return GestureDetector(
+                            onTap: () {
+                              showModalBottomSheet(
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(
+                                      top: Radius.circular(24)),
                                 ),
-                              ],
-                            ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.all(
-                                  16.0), // Padding inside each ListTile
-                              title: Text(
-                                (recommendation['name'] ?? 'Recipe')
-                                    .toUpperCase(),
-                                style: const TextStyle(
-                                  fontWeight:
-                                      FontWeight.bold, // Make the name bold
-                                  fontSize: 16.0, // Adjust font size if needed
+                                context: context,
+                                builder: (context) => DishScreen(
+                                  recipeData: dish,
                                 ),
+                              );
+                            },
+                            child: Card(
+                              elevation: 4.0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12.0),
                               ),
-                              subtitle: Text(
-                                'Rating: ${recommendation['rating'] ?? 'N/A'}',
-                                style: const TextStyle(
-                                  color: Colors.grey, // Subtitle color
-                                ),
-                              ),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => DishScreen(
-                                      recipeData: recommendation,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[200],
+                                        borderRadius:
+                                            BorderRadius.circular(12.0),
+                                      ),
+                                      child: const Center(
+                                        child: Icon(
+                                          Icons.fastfood,
+                                          size: 40,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
+                                    const SizedBox(height: 8.0),
+                                    Text(
+                                      (dish['name'] ?? '').toUpperCase(),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 4.0),
+                                    Text(
+                                      'Rating: ${(dish['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                                      style: const TextStyle(
+                                        color: Colors.black,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           );
-                        }).toList(),
+                        },
                       )
                     : const Center(child: Text('No recommendations yet')),
           ],
@@ -151,40 +230,33 @@ class _ResultsState extends State<Results> {
       ),
     );
   }
-}
 
-class RecipeDetailScreen extends StatelessWidget {
-  final Map<String, dynamic> recipe;
-
-  const RecipeDetailScreen({super.key, required this.recipe});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(recipe['name'] ?? 'Recipe Details'),
+  Widget buildScannedIngredient(String ingredient) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
+      decoration: BoxDecoration(
+        color: const Color(0xFFD0AD6D),
+        borderRadius: BorderRadius.circular(8.0),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black26,
+            offset: Offset(0, 2),
+            blurRadius: 4.0,
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              recipe['name'] ?? 'No Name',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Rating: ${recipe['rating'] ?? 'N/A'}',
-              style: const TextStyle(fontSize: 18),
-            ),
-            const SizedBox(height: 20),
-            // Add more details about the recipe here
-            Text(
-              recipe['description'] ?? 'No description available',
-              style: const TextStyle(fontSize: 16),
-            ),
-          ],
+      child: Center(
+        child: Text(
+          ingredient,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontStyle: FontStyle.italic,
+            fontWeight: FontWeight.normal,
+            fontSize: 10.0, // Adjust text size here
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis, // Ensure long text gets truncated
         ),
       ),
     );

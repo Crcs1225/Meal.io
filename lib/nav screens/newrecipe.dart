@@ -1,10 +1,11 @@
 import 'dart:io';
-import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:image_picker/image_picker.dart';
-
-import '../utility/config.dart';
+import 'package:loading_indicator/loading_indicator.dart';
 
 class NewRecipe extends StatefulWidget {
   const NewRecipe({super.key});
@@ -15,27 +16,19 @@ class NewRecipe extends StatefulWidget {
 
 class _NewRecipeState extends State<NewRecipe> {
   //form keys
-
-  // Form field controllers
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _minutesController = TextEditingController();
-  final TextEditingController _caloriesController = TextEditingController();
-  final TextEditingController _totalFatController = TextEditingController();
-  final TextEditingController _sugarController = TextEditingController();
-  final TextEditingController _sodiumController = TextEditingController();
-  final TextEditingController _proteinController = TextEditingController();
-  final TextEditingController _saturatedFatController = TextEditingController();
-  final TextEditingController _carbohydratesController =
-      TextEditingController();
-  final TextEditingController _calorieStatusController =
-      TextEditingController();
-  final TextEditingController _ingredientController = TextEditingController();
-  final TextEditingController _tagController = TextEditingController();
-  final TextEditingController _stepController = TextEditingController();
+  late TextEditingController _nameController;
+  late TextEditingController _caloriesController;
+  late TextEditingController _fatsController;
+  late TextEditingController _proteinController;
+  late TextEditingController _carbohydratesController;
+  late TextEditingController _ingredientController;
+  late TextEditingController _tagController;
+  late TextEditingController _stepController;
+  late TextEditingController _descriptionController;
   // For tags, steps, and ingredients
-  List<String> _tags = [];
-  List<String> _steps = [];
-  List<String> _ingredients = [];
+  final List<String> _tags = [];
+  final List<String> _steps = [];
+  final List<String> _ingredients = [];
   //page controls
   int currentIndex = 0;
   late PageController _controller;
@@ -47,18 +40,55 @@ class _NewRecipeState extends State<NewRecipe> {
 
   @override
   void initState() {
-    _controller = PageController(initialPage: 0);
+    _nameController = TextEditingController();
+    _caloriesController = TextEditingController();
+    _fatsController = TextEditingController();
+    _proteinController = TextEditingController();
+    _carbohydratesController = TextEditingController();
+    _ingredientController = TextEditingController();
+    _tagController = TextEditingController();
+    _stepController = TextEditingController();
+    _descriptionController = TextEditingController();
+
+    _controller = PageController();
+    _controller = PageController();
     super.initState();
   }
 
-  //Upload to server using http
+  void _showLoadingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible:
+          false, // Prevent dismissing the dialog by tapping outside
+      builder: (BuildContext context) {
+        return const AlertDialog(
+          content: SizedBox(
+              height: 200,
+              child: LoadingIndicator(
+                  indicatorType: Indicator.ballClipRotatePulse,
+                  colors: const [Color(0xFFD0AD6D)],
+                  strokeWidth: 2,
+                  backgroundColor: Colors.white,
+                  pathBackgroundColor: Colors.black)),
+        );
+      },
+    );
+  }
+
+  // Function to close the loading dialog
+  void _hideLoadingDialog() {
+    Navigator.of(context, rootNavigator: true)
+        .pop(); // Close the loading dialog
+  }
+
   void _addRecipe() async {
+    _showLoadingDialog();
     setState(() {
-      _isSubmitting = true; // Set to true to show error messages
+      _isSubmitting = true; // Set to true to show the loading state
     });
 
     if (_imageFile == null) {
-      // Display an error message and stop the submission
+      // Display an error message if no image is uploaded
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please upload a picture of your recipe.'),
@@ -71,87 +101,70 @@ class _NewRecipeState extends State<NewRecipe> {
       return;
     }
 
-    // Create a multipart request
-    var request = http.MultipartRequest(
-      'POST',
-      Uri.parse(Config.uploadrecipe), // Replace with your Flask server URL
-    );
-
-    // Add text fields
-    request.fields['name'] = _nameController.text;
-    request.fields['minutes'] = _minutesController.text;
-    request.fields['tags'] = _tags.join(',');
-    request.fields['n_steps'] = _steps.length.toString();
-    request.fields['steps'] = _steps.join(',');
-    request.fields['ingredients'] = _ingredients.join(',');
-    request.fields['n_ingredients'] = _ingredients.length.toString();
-    request.fields['calories'] = _caloriesController.text;
-    request.fields['total_fat'] = _totalFatController.text;
-    request.fields['sugar'] = _sugarController.text;
-    request.fields['sodium'] = _sodiumController.text;
-    request.fields['protein'] = _proteinController.text;
-    request.fields['saturated_fat'] = _saturatedFatController.text;
-    request.fields['carbohydrates'] = _carbohydratesController.text;
-    request.fields['calorie_status'] = _calorieStatusController.text;
-
-    // Add the image file
-    var file = await http.MultipartFile.fromPath(
-      'picture', // Field name in the Flask request
-      _imageFile!.path,
-    );
-    request.files.add(file);
-
-    // Send the request
     try {
-      var response = await request.send();
+      // Convert XFile to File
+      File imageFile = File(_imageFile!.path);
 
-      if (response.statusCode == 200) {
-        // Handle success
+      // Upload the image to Firebase Storage
+      String fileName =
+          DateTime.now().millisecondsSinceEpoch.toString(); // Unique file name
+      FirebaseStorage storage = FirebaseStorage.instance;
+      Reference ref = storage.ref().child('recipe_images/$fileName');
+
+      // Upload the image file
+      UploadTask uploadTask = ref.putFile(imageFile);
+      TaskSnapshot taskSnapshot = await uploadTask;
+
+      // Get the download URL of the uploaded image
+      String downloadUrl = await taskSnapshot.ref.getDownloadURL();
+
+      // Save recipe data to Firestore
+      CollectionReference recipes =
+          FirebaseFirestore.instance.collection('added');
+
+      await recipes.add({
+        'name': _nameController.text,
+        'tags': _tags.join(','),
+        'steps': _steps.join(','),
+        'ingredients': _ingredients.join(','),
+        'calories': _caloriesController.text,
+        'fats': _fatsController.text,
+        'protein': _proteinController.text,
+        'carbs': _carbohydratesController.text,
+        'picture_url': downloadUrl, // Store the image URL from Firebase Storage
+        'created_at': FieldValue
+            .serverTimestamp(), // Optional: Timestamp for when the recipe is added
+      });
+      _hideLoadingDialog();
+      // Show success message
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Recipe submitted successfully!'),
             backgroundColor: Colors.green,
           ),
         );
+      }
 
-        // Dispose of controllers and reset variables
-        _disposeControllers();
-        _resetFormState();
-      } else {
-        // Handle error
+      // Dispose of controllers and reset variables
+
+      _resetFormState();
+    } catch (e) {
+      _hideLoadingDialog();
+      // Handle any errors during the upload or Firestore operation
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to submit recipe.'),
+          SnackBar(
+            content: Text('An error occurred: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
-    } catch (e) {
-      // Handle error
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('An error occurred: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    } finally {
+      setState(() {
+        _isSubmitting = false; // Reset after submission
+      });
     }
-
-    setState(() {
-      _isSubmitting = false; // Reset after submission
-    });
-  }
-
-  void _disposeControllers() {
-    _nameController.dispose();
-    _minutesController.dispose();
-    _caloriesController.dispose();
-    _totalFatController.dispose();
-    _sugarController.dispose();
-    _sodiumController.dispose();
-    _proteinController.dispose();
-    _saturatedFatController.dispose();
-    _carbohydratesController.dispose();
-    _calorieStatusController.dispose();
   }
 
   void _resetFormState() {
@@ -160,6 +173,20 @@ class _NewRecipeState extends State<NewRecipe> {
       _steps.clear();
       _ingredients.clear();
       _imageFile = null;
+
+      // Clear controllers and reinitialize them
+      _nameController.clear();
+      _caloriesController.clear();
+      _fatsController.clear();
+      _proteinController.clear();
+      _carbohydratesController.clear();
+      _ingredientController.clear();
+      _tagController.clear();
+      _stepController.clear();
+      _descriptionController.clear();
+
+      // Optionally reset the page controller to the first index
+      _controller.jumpToPage(0);
     });
   }
 
@@ -223,12 +250,16 @@ class _NewRecipeState extends State<NewRecipe> {
 
   @override
   void dispose() {
-    super.dispose();
     _nameController.dispose();
-    _stepController.dispose();
-    _ingredientController.dispose();
+    _caloriesController.dispose();
+    _fatsController.dispose();
+    _proteinController.dispose();
+    _carbohydratesController.dispose();
+    _descriptionController.dispose(); // Don't forget to dispose of this as well
     _tagController.dispose();
+    _stepController.dispose();
     _controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -259,7 +290,7 @@ class _NewRecipeState extends State<NewRecipe> {
                 _buildIngredients(),
                 _buildSteps(),
                 _buildTags(),
-
+                _buildDescription(),
                 _buildNutritionalInfoFields(),
                 _buildPicture(),
                 _buildSummaryScreen(), // Final screen
@@ -268,6 +299,66 @@ class _NewRecipeState extends State<NewRecipe> {
           ),
           _buildButton(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDescription() {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Catchy Header for the description
+            const Text(
+              'What’s the Recipe Description?',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFD0AD6D), // Catchy color for the header
+              ),
+            ),
+            const SizedBox(height: 12), // Spacing between header and text field
+
+            // Recipe Description Input Field
+            TextFormField(
+              controller: _descriptionController,
+              maxLines: 8, // Allows multi-line input, you can adjust this
+              decoration: InputDecoration(
+                hintText: 'Enter recipe description', // Placeholder text
+                hintStyle: TextStyle(
+                  color: Colors.grey[500], // Placeholder color
+                ),
+                filled: true,
+                fillColor:
+                    const Color(0xFFEEF7E8), // Background color of text field
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none, // Remove default border
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF83ABD1), // Blue border when focused
+                    width: 2,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(
+                    color: Colors.red, // Red border for error state
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -567,41 +658,9 @@ class _NewRecipeState extends State<NewRecipe> {
             ),
             const SizedBox(height: 16), // Space before the form
 
-            // First row with 3 fields: Minutes, Calories, Total Fat
+            // Row with 2 fields: Calories, Fats
             Row(
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Minutes',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                          color: Colors.grey[500], // Placeholder color
-                          // Smaller header text size
-                        ),
-                      ),
-                      TextFormField(
-                        controller: _minutesController,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(fontSize: 12),
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: const Color(0xFFEEF7E8),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              vertical: 8, horizontal: 8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -639,7 +698,7 @@ class _NewRecipeState extends State<NewRecipe> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Total Fat',
+                        'Fats',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 11,
@@ -648,7 +707,7 @@ class _NewRecipeState extends State<NewRecipe> {
                         ),
                       ),
                       TextFormField(
-                        controller: _totalFatController,
+                        controller: _fatsController,
                         keyboardType: TextInputType.number,
                         style: const TextStyle(fontSize: 12),
                         decoration: InputDecoration(
@@ -669,73 +728,9 @@ class _NewRecipeState extends State<NewRecipe> {
             ),
             const SizedBox(height: 16),
 
-            // Second row with 3 fields: Sugar, Sodium, Protein
+            // Row with 2 fields: Protein, Carbohydrates
             Row(
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Sugar',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                          color: Colors.grey[500], // Placeholder color
-                          // Smaller header text size
-                        ),
-                      ),
-                      TextFormField(
-                        controller: _sugarController,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(fontSize: 12),
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: const Color(0xFFEEF7E8),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              vertical: 8, horizontal: 8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Sodium',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                          color: Colors.grey[500], // Placeholder color
-                          // Smaller header text size
-                        ),
-                      ),
-                      TextFormField(
-                        controller: _sodiumController,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(fontSize: 12),
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: const Color(0xFFEEF7E8),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              vertical: 8, horizontal: 8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -751,44 +746,6 @@ class _NewRecipeState extends State<NewRecipe> {
                       ),
                       TextFormField(
                         controller: _proteinController,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(fontSize: 12),
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: const Color(0xFFEEF7E8),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              vertical: 8, horizontal: 8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Third row with 3 fields: Saturated Fat, Carbohydrates, Calorie Status
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Saturated Fat',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                          color: Colors.grey[500], // Placeholder color
-                          // Smaller header text size
-                        ),
-                      ),
-                      TextFormField(
-                        controller: _saturatedFatController,
                         keyboardType: TextInputType.number,
                         style: const TextStyle(fontSize: 12),
                         decoration: InputDecoration(
@@ -837,57 +794,6 @@ class _NewRecipeState extends State<NewRecipe> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
-
-                // Calorie Status Dropdown
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Calorie Status',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                          color: Colors.grey[500], // Placeholder color
-                          // Smaller header text size
-                        ),
-                      ),
-                      DropdownButtonFormField<String>(
-                        // Ensure the value matches the dropdown items (case-sensitive)
-                        value: _calorieStatusController.text.isNotEmpty &&
-                                ['Low', 'Medium', 'High']
-                                    .contains(_calorieStatusController.text)
-                            ? _calorieStatusController.text
-                            : null,
-                        items: ['Low', 'Medium', 'High']
-                            .map((status) => DropdownMenuItem(
-                                  value: status,
-                                  child: Text(
-                                    status,
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ))
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _calorieStatusController.text = value!;
-                          });
-                        },
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: const Color(0xFFEEF7E8),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                              vertical: 8, horizontal: 8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ],
@@ -902,7 +808,7 @@ class _NewRecipeState extends State<NewRecipe> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(
-          7, // Number of screens
+          8, // Number of screens
           (index) => AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
@@ -938,7 +844,7 @@ class _NewRecipeState extends State<NewRecipe> {
         width: double.infinity,
         child: FloatingActionButton.extended(
           onPressed: () {
-            if (currentIndex == 6) {
+            if (currentIndex == 7) {
               bool allFieldsFilled = true;
               int invalidPageIndex = -1;
 
@@ -946,31 +852,16 @@ class _NewRecipeState extends State<NewRecipe> {
               if (_nameController.text.isEmpty) {
                 allFieldsFilled = false;
                 invalidPageIndex = 0;
-              } else if (_minutesController.text.isEmpty) {
-                allFieldsFilled = false;
-                invalidPageIndex = 4;
               } else if (_caloriesController.text.isEmpty) {
                 allFieldsFilled = false;
                 invalidPageIndex = 4;
-              } else if (_totalFatController.text.isEmpty) {
-                allFieldsFilled = false;
-                invalidPageIndex = 4;
-              } else if (_sugarController.text.isEmpty) {
-                allFieldsFilled = false;
-                invalidPageIndex = 4;
-              } else if (_sodiumController.text.isEmpty) {
+              } else if (_fatsController.text.isEmpty) {
                 allFieldsFilled = false;
                 invalidPageIndex = 4;
               } else if (_proteinController.text.isEmpty) {
                 allFieldsFilled = false;
                 invalidPageIndex = 4;
-              } else if (_saturatedFatController.text.isEmpty) {
-                allFieldsFilled = false;
-                invalidPageIndex = 4;
               } else if (_carbohydratesController.text.isEmpty) {
-                allFieldsFilled = false;
-                invalidPageIndex = 4;
-              } else if (_calorieStatusController.text.isEmpty) {
                 allFieldsFilled = false;
                 invalidPageIndex = 4;
               } else if (_steps.isEmpty) {
@@ -1010,7 +901,7 @@ class _NewRecipeState extends State<NewRecipe> {
           foregroundColor: Colors.white,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          label: Text(currentIndex == 6 ? "Submit" : "Next"),
+          label: Text(currentIndex == 7 ? "Submit" : "Next"),
         ),
       ),
     );
@@ -1085,16 +976,14 @@ class _NewRecipeState extends State<NewRecipe> {
     final List<String> ingredients = _ingredients;
     final List<String> steps = _steps;
     final List<String> tags = _tags;
+    final String description =
+        _descriptionController.text; // Add a controller for description
     final Map<String, String> nutritionalInfo = {
       'Calories': _caloriesController.text,
-      'Fat': _totalFatController.text,
-      'Sugar': _sugarController.text,
-      'Sodium': _sodiumController.text,
+      'Fat': _fatsController.text,
       'Protein': _proteinController.text,
-      'Saturated Fat': _saturatedFatController.text,
       'Carbohydrates': _carbohydratesController.text,
     };
-    final String calorieStatus = _calorieStatusController.text;
 
     final List<PieChartSectionData> pieChartSections =
         _createPieChartSections(nutritionalInfo);
@@ -1123,227 +1012,229 @@ class _NewRecipeState extends State<NewRecipe> {
           ),
           Transform.translate(
             offset: const Offset(0, -50),
-            child: Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(24),
-                    topRight: Radius.circular(24),
+            child: Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text(
+                      name.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF83ABD1),
+                      ),
+                    ),
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 24),
-                    Padding(
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
-                        name.toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF83ABD1),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Row(
-                          children: tags.map((tag) {
-                            return Container(
-                              margin:
-                                  const EdgeInsets.symmetric(horizontal: 4.0),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12.0, vertical: 4.0),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16.0),
-                                color: const Color(0xFFF0F3F6),
-                              ),
-                              child: Text(tag,
-                                  style: const TextStyle(
-                                      color: Color(0xFFD0AD6D),
-                                      fontSize: 14.0)),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text('Recipe',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: Color(0xFF333333))),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 30.0),
-                      child: Text('Ingredients:',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              color: Color(0xFF564F4F))),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 30.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: ingredients.map((item) {
-                          return Text(
-                            '• $item',
-                            style: const TextStyle(
-                              fontSize: 14.0,
-                              color: Color(0xFF515151),
+                      child: Row(
+                        children: tags.map((tag) {
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12.0, vertical: 4.0),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16.0),
+                              color: const Color(0xFFF0F3F6),
                             ),
+                            child: Text(tag,
+                                style: const TextStyle(
+                                    color: Color(0xFFD0AD6D), fontSize: 14.0)),
                           );
                         }).toList(),
                       ),
                     ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Divider(
-                        thickness: 1,
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 30.0),
-                      child: Text('How to cook:',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              color: Color(0xFF564F4F))),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 30.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: steps.map((item) {
-                          return Text(
-                            '• $item',
-                            style: const TextStyle(
-                              fontSize: 14.0,
-                              color: Color(0xFF515151),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Divider(
-                        thickness: 1,
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 30.0),
-                      child: Text('Nutritional Content:',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              color: Color(0xFF564F4F))),
-                    ),
-                    Row(
-                      children: [
-                        SizedBox(
-                          height: 200,
-                          width:
-                              200, // Adjust this width to your needs or remove it to fit content automatically
-                          child: pieChartSections.isNotEmpty
-                              ? PieChart(
-                                  PieChartData(
-                                    sections: pieChartSections,
-                                    centerSpaceRadius: 40,
-                                    sectionsSpace: 0,
-                                    startDegreeOffset: 90,
-                                    borderData: FlBorderData(show: false),
-                                  ),
-                                )
-                              : const Center(
-                                  child: Flexible(
-                                    child: Text(
-                                      'No nutritional data available',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                          fontSize:
-                                              14.0), // Adjust font size as needed
-                                      softWrap: true,
-                                      overflow: TextOverflow
-                                          .clip, // This helps in wrapping the text
-                                    ),
-                                  ),
-                                ),
-                        ),
-                        const SizedBox(width: 16.0),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: nutritionalInfo.entries.map((entry) {
-                            final color = _getPieChartColor(entry.key);
-                            return Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width:
-                                      12, // Smaller size for the circular indicator
-                                  height: 12,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: color,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black
-                                            .withOpacity(0.3), // Shadow color
-                                        offset: const Offset(
-                                            0, 2), // Shadow position
-                                        blurRadius: 2, // Shadow blur radius
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(
-                                    width:
-                                        8), // Space between the indicator and text
-                                Text(
-                                  entry.key,
-                                  style: const TextStyle(
-                                      fontSize: 8.0,
-                                      fontWeight:
-                                          FontWeight.bold), // Smaller text size
-                                ),
-                              ],
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ),
+                  ),
 
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Divider(
-                        thickness: 1,
+                  // Add Ingredients section here
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text('Recipe',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Color(0xFF333333))),
+                  ),
+                  const SizedBox(height: 10),
+                  // Add the description here
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text('Description',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: Color(0xFF333333))),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 30.0),
+                    child: Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 14.0,
+                        color: Color(0xFF515151),
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    // Display Calorie Status as text
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 30.0),
-                      child: Text(
-                        'Calorie Status: $calorieStatus',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                          color: Color(0xFF564F4F),
-                        ),
-                      ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 30.0),
+                    child: Text('Ingredients:',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: Color(0xFF564F4F))),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 30.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: ingredients.map((item) {
+                        return Text(
+                          '• $item',
+                          style: const TextStyle(
+                            fontSize: 14.0,
+                            color: Color(0xFF515151),
+                          ),
+                        );
+                      }).toList(),
                     ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
+                  ),
+                  // Rest of your existing code continues here...
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Divider(
+                      thickness: 1,
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 30.0),
+                    child: Text('How to cook:',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: Color(0xFF564F4F))),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 30.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: steps.map((item) {
+                        return Text(
+                          '• $item',
+                          style: const TextStyle(
+                            fontSize: 14.0,
+                            color: Color(0xFF515151),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  // Add remaining code...
+                  const SizedBox(height: 24),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Divider(
+                      thickness: 1,
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 30.0),
+                    child: Text('Nutritional Content:',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: Color(0xFF564F4F))),
+                  ),
+                  // Nutritional chart and other content
+                  Row(
+                    children: [
+                      SizedBox(
+                        height: 200,
+                        width:
+                            200, // Adjust this width or remove it to fit content
+                        child: pieChartSections.isNotEmpty
+                            ? PieChart(
+                                PieChartData(
+                                  sections: pieChartSections,
+                                  centerSpaceRadius: 40,
+                                  sectionsSpace: 0,
+                                  startDegreeOffset: 90,
+                                  borderData: FlBorderData(show: false),
+                                ),
+                              )
+                            : const Center(
+                                child: Text(
+                                  'No nutritional data available',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 14.0),
+                                  softWrap: true,
+                                  overflow: TextOverflow.clip,
+                                ),
+                              ),
+                      ),
+                      const SizedBox(width: 16.0),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: nutritionalInfo.entries.map((entry) {
+                          final color = _getPieChartColor(entry.key);
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: color,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.3),
+                                      offset: const Offset(0, 2),
+                                      blurRadius: 2,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                entry.key,
+                                style: const TextStyle(
+                                    fontSize: 8.0, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                entry.value,
+                                style: const TextStyle(
+                                    fontSize: 8, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Divider(
+                      thickness: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
               ),
             ),
           ),
@@ -1375,19 +1266,13 @@ class _NewRecipeState extends State<NewRecipe> {
     // Provide colors for different nutritional content
     switch (key) {
       case 'Calories':
-        return Colors.orange;
+        return Colors.green;
       case 'Fat':
         return Colors.red;
-      case 'Sugar':
-        return Colors.pink;
-      case 'Sodium':
-        return Colors.blue;
       case 'Protein':
-        return Colors.green;
-      case 'Saturated Fat':
-        return Colors.purple;
+        return Colors.pink;
       case 'Carbohydrates':
-        return Colors.yellow;
+        return Colors.blue;
       default:
         return Colors.grey;
     }

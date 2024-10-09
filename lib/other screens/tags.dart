@@ -6,9 +6,12 @@ import 'dish.dart';
 
 class TagScreen extends StatefulWidget {
   final List<String> preferences; // Add a field to hold the preferences
+  final String id;
 
   const TagScreen(
-      {super.key, required this.preferences}); // Add preferences to constructor
+      {super.key,
+      required this.preferences,
+      required this.id}); // Add preferences to constructor
 
   @override
   State<TagScreen> createState() => _TagScreenState();
@@ -25,15 +28,15 @@ class _TagScreenState extends State<TagScreen> {
       _isLoading = true;
     });
 
-    final url = Uri.parse('$ip/tag-based');
+    final url = Uri.parse('$ip/recommend_by_tags');
 
     try {
       final response = await http.post(
         url,
         headers: {"Content-Type": "application/json"},
         body: json.encode({
-          'input_tags': widget.preferences,
-          'num_similar': 10,
+          'tags': widget.preferences,
+          'user_id': widget.id,
         }),
       );
 

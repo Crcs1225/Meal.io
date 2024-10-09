@@ -21,8 +21,7 @@ class _HomePageState extends State<HomePage> {
   List<Map<String, dynamic>> _topRecipes = [];
   bool _isLoading = true;
   bool _isLoadingrec = false;
-  String ip = 'http://192.168.1.237:5000';
-  String userId = "";
+
   //controller for tags and ingredients
   final TextEditingController _ingredientController = TextEditingController();
   final List<String> _ingredients = [];
@@ -129,14 +128,18 @@ class _HomePageState extends State<HomePage> {
 
   //posr request for ingredient recommendation
   void _getRecommendations() async {
+    String? userId = await _fetchUserId();
     final url =
         Uri.parse(Config.ingredient); // Replace with your Flask server URL
+    print('Sending request to: $url');
+    print('User ID: $userId');
+    print('Ingredients: $_ingredients');
     final response = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
       body: json.encode({
-        'input_ingredients': _ingredients,
-        'num_similar': 5,
+        'user_id': userId,
+        'ingredients': _ingredients,
       }),
     );
 
@@ -210,6 +213,30 @@ class _HomePageState extends State<HomePage> {
     return null;
   }
 
+  void _navigateToTagScreen() async {
+    String? userId = await _fetchUserId(); // Fetch the user ID
+
+    if (userId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TagScreen(
+            preferences: _selectedTags,
+            id: userId, // Pass the user ID here
+          ),
+        ),
+      );
+    } else {
+      // Handle the case when user ID is null (optional)
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to fetch user ID. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   //you may like machine learning post request
   Future<void> _loadTopRecipes() async {
     setState(() {
@@ -265,12 +292,13 @@ class _HomePageState extends State<HomePage> {
     final url = Uri.parse(Config.tag);
 
     try {
+      String? userId = await _fetchUserId();
       final response = await http.post(
         url,
         headers: {"Content-Type": "application/json"},
         body: json.encode({
-          'input_tags': _selectedTags,
-          'num_similar': 3,
+          'tags': _selectedTags,
+          'user_id': userId,
         }),
       );
 
@@ -300,15 +328,16 @@ class _HomePageState extends State<HomePage> {
       _isLoading = true;
     });
 
-    final url = Uri.parse('$ip/tag-based');
+    final url = Uri.parse(Config.tag);
 
     try {
+      String? userId = await _fetchUserId();
       final response = await http.post(
         url,
         headers: {"Content-Type": "application/json"},
         body: json.encode({
-          'input_tags': selectedPreferences,
-          'num_similar': 5,
+          'tags': selectedPreferences,
+          'user_id': userId,
         }),
       );
 
@@ -716,13 +745,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 GestureDetector(
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => TagScreen(
-                                preferences: _selectedTags,
-                              )),
-                    );
+                    _navigateToTagScreen();
                   },
                   child: const Text(
                     'View all',
@@ -980,38 +1003,51 @@ class _HomePageState extends State<HomePage> {
         itemCount: _recommendations.length,
         itemBuilder: (context, index) {
           final recommendation = _recommendations[index];
-          return Container(
-            width: 200,
-            margin: const EdgeInsets.only(right: 16.0),
-            child: Card(
-              elevation: 4.0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      recommendation['name'] ?? 'Recipe Name',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16.0,
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DishScreen(
+                    recipeData: recommendation,
+                  ),
+                ),
+              );
+              print('$recommendation');
+            },
+            child: Container(
+              width: 200,
+              margin: const EdgeInsets.only(right: 16.0),
+              child: Card(
+                elevation: 4.0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        recommendation['name'] ?? 'Recipe Name',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16.0,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8.0),
-                    Text(
-                      recommendation['description'] ?? 'Description',
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8.0),
-                    Text(
-                      'Rating: ${recommendation['rating'] ?? 'N/A'}',
-                      style: const TextStyle(color: Colors.grey),
-                    ),
-                  ],
+                      const SizedBox(height: 8.0),
+                      Text(
+                        recommendation['description'] ?? 'Description',
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8.0),
+                      Text(
+                        'Rating: ${recommendation['rating'] ?? 'N/A'}',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

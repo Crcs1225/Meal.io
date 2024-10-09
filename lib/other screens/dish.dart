@@ -1,7 +1,11 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
+
+import '../utility/rate.dart';
 
 class DishScreen extends StatefulWidget {
   final Map<String, dynamic> recipeData; // Accepting complete recipe data
@@ -17,17 +21,54 @@ class DishScreen extends StatefulWidget {
 
 class _DishState extends State<DishScreen> {
   late Map<String, double> nutritionalInfo;
+  int id = 0;
   String dishName = '';
   double ratings = 0.0;
   List<String> tags = [];
   List<String> ingredients = [];
   List<String> steps = [];
-  String stats = '';
+  String link = '';
+  String desc = '';
+
+  Future<String?> _fetchUserId() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+
+      if (currentUser == null) {
+        print('No user is currently signed in.');
+        return null; // Return null if no user is signed in
+      }
+
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      if (userDoc.exists) {
+        Map<String, dynamic>? userData =
+            userDoc.data() as Map<String, dynamic>?;
+
+        if (userData != null) {
+          String? userId = userData['user_id']; // Assuming user_id is a String
+          print('Fetched user ID: $userId');
+          return userId; // Return the fetched user ID
+        } else {
+          print('User document data is null.');
+        }
+      } else {
+        print('User document not found.');
+      }
+    } catch (e) {
+      print('Error fetching user ID: $e');
+    }
+    return null; // Return null in case of error
+  }
 
   @override
   void initState() {
     super.initState();
     _loadRecipeData();
+    _fetchUserId();
     nutritionalInfo = _extractNutritionalInfo(widget.recipeData);
   }
 
@@ -35,13 +76,10 @@ class _DishState extends State<DishScreen> {
     // Extracting the nutritional information assuming it's stored in the 'nutrition' field
     // Example: {"Carbs": 30, "Protein": 20, "Fat": 10, "Fiber": 5, "Sugar": 5}
     final Map<String, double> extractedNutritionalInfo = {
-      "Carbohydrates": recipeData["Carbohydrates (PDV)"]?.toDouble() ?? 0.0,
-      "Protein": recipeData["protein (PDV)"]?.toDouble() ?? 0.0,
-      "Total Fat": recipeData["total fat (PDV)"]?.toDouble() ?? 0.0,
+      "Carbohydrates": recipeData["carbs"]?.toDouble() ?? 0.0,
+      "Protein": recipeData["protein"]?.toDouble() ?? 0.0,
+      "Fat": recipeData["fats"]?.toDouble() ?? 0.0,
       "Calories": recipeData["calories"]?.toDouble() ?? 0.0,
-      "Sugar": recipeData["sugar (PDV)"]?.toDouble() ?? 0.0,
-      "Sodium": recipeData["sodium (PDV)"]?.toDouble() ?? 0.0,
-      "Saturated Fat": recipeData["saturated fat (PDV)"]?.toDouble() ?? 0.0,
     };
 
     return extractedNutritionalInfo;
@@ -51,12 +89,14 @@ class _DishState extends State<DishScreen> {
     final recipeData = widget.recipeData;
 
     setState(() {
+      id = recipeData['id'] ?? 0;
       dishName = recipeData['name'] ?? '';
       ratings = _parseToDouble(recipeData['rating'] ?? '0.0');
       tags = _cleanUpList(recipeData['tags'] ?? '');
       ingredients = _cleanUpList(recipeData['ingredients'] ?? '');
       steps = _cleanUpList(recipeData['steps'] ?? '');
-      stats = recipeData['calorie_status'] ?? '';
+      link = recipeData['links'] ?? '';
+      desc = recipeData['description'] ?? '';
     });
   }
 
@@ -110,8 +150,16 @@ class _DishState extends State<DishScreen> {
               Container(
                 height: 250,
                 width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Colors.grey,
+                decoration: BoxDecoration(
+                  color: link.isEmpty
+                      ? Colors.grey
+                      : null, // If link is null or empty, set color to grey
+                  image: link.isNotEmpty
+                      ? DecorationImage(
+                          image: NetworkImage(link),
+                          fit: BoxFit.cover,
+                        )
+                      : null, // If link is empty, no image will be used
                 ),
                 child: Stack(
                   children: [
@@ -228,6 +276,33 @@ class _DishState extends State<DishScreen> {
                                 fontSize: 16,
                                 color: Color(0xFF333333))),
                       ),
+                      if (desc.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 16.0, vertical: 8.0),
+                          child: Text(
+                            'Description',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: Color(0xFF333333),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Text(
+                            desc, // Display the description content
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF666666),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(
+                          height: 16,
+                        )
+                      ],
 
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 30.0),
@@ -300,18 +375,9 @@ class _DishState extends State<DishScreen> {
                       ),
                       // Nutritional Information pie chart
                       _buildPieChart(nutritionalInfo),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 30.0),
-                        child: Text(
-                          'Calorie Status: $stats',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                            color: Color(0xFF564F4F),
-                          ),
-                        ),
-                      ),
+
                       const SizedBox(height: 24),
+                      _buildRateRecipes(id, dishName),
                     ],
                   ),
                 ),
@@ -369,6 +435,8 @@ class _DishState extends State<DishScreen> {
               padding: const EdgeInsets.symmetric(
                   vertical: 4.0), // Add some padding if needed
               child: Row(
+                mainAxisAlignment: MainAxisAlignment
+                    .spaceBetween, // Align the text on the left and value on the right
                 children: [
                   Row(
                     children: [
@@ -382,21 +450,24 @@ class _DishState extends State<DishScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        entry.key, // Just the key on the left side
-                        style: const TextStyle(fontSize: 8),
+                        entry.key, // Nutritional label on the left side
+                        style: const TextStyle(
+                          fontSize: 8,
+                        ),
                       ),
                     ],
                   ),
-                  const Spacer(), // Spacer will push the value to the right
+                  const SizedBox(width: 8),
                   Text(
-                    '${entry.value.toStringAsFixed(1)}', // The value aligned to the right
-                    style: const TextStyle(fontSize: 8),
+                    '${entry.value}', // The value aligned to the right
+                    style: const TextStyle(
+                        fontSize: 8, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
             );
           }).toList(),
-        )
+        ),
       ],
     );
   }
@@ -421,5 +492,52 @@ class _DishState extends State<DishScreen> {
       default:
         return Colors.grey;
     }
+  }
+
+  Widget _buildRateRecipes(int recipeId, String name) {
+    return FutureBuilder<String?>(
+      future: _fetchUserId(),
+      builder: (BuildContext context, AsyncSnapshot<String?> snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return CircularProgressIndicator(); // Show loading indicator while fetching
+        } else if (snapshot.hasError) {
+          return Text('Error: ${snapshot.error}'); // Handle error case
+        } else if (snapshot.hasData && snapshot.data != null) {
+          String userId =
+              snapshot.data!; // Safe to use because we checked for null
+          return Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(left: 40, right: 40, bottom: 16),
+            child: SizedBox(
+              width: double.infinity,
+              child: FloatingActionButton.extended(
+                backgroundColor:
+                    const Color(0xFF83ABD1), // Button background color
+                foregroundColor: Colors.white, // Text color
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20), // Rounded corners
+                ),
+                label: const Text('Rate Recipe'), // Button text
+                onPressed: () {
+                  // Navigate to the RateRecipeScreen and pass the recipeId and userId
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RateRecipeScreen(
+                        recipeId: recipeId,
+                        userId: userId,
+                        name: name,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        } else {
+          return Text('No user ID found.'); // Handle case where userId is null
+        }
+      },
+    );
   }
 }
