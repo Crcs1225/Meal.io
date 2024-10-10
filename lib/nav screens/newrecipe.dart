@@ -66,7 +66,7 @@ class _NewRecipeState extends State<NewRecipe> {
               height: 200,
               child: LoadingIndicator(
                   indicatorType: Indicator.ballClipRotatePulse,
-                  colors: const [Color(0xFFD0AD6D)],
+                  colors: [Color(0xFFD0AD6D)],
                   strokeWidth: 2,
                   backgroundColor: Colors.white,
                   pathBackgroundColor: Colors.black)),

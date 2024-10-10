@@ -53,7 +53,6 @@ dependencies:
   lottie: ^3.1.2
   firebase_storage: ^12.1.1
   intl: ^0.19.0
-  tflite_flutter: ^0.10.4
   http: ^1.2.2
   fl_chart: ^0.69.0
   loading_indicator: ^3.1.1
@@ -100,11 +99,6 @@ flutter:
     - assets/scan.json
     - assets/welcome.svg
     - assets/loading.json
-    - assets/ranking.tflite
-    - assets/user_retrieval.tflite
-    
-    
-
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

@@ -9,11 +9,10 @@ class RateRecipeScreen extends StatefulWidget {
   final String? userId;
 
   const RateRecipeScreen(
-      {Key? key,
+      {super.key,
       required this.recipeId,
       required this.userId,
-      required this.name})
-      : super(key: key);
+      required this.name});
 
   @override
   State<RateRecipeScreen> createState() => _RateRecipeScreenState();
@@ -21,7 +20,7 @@ class RateRecipeScreen extends StatefulWidget {
 
 class _RateRecipeScreenState extends State<RateRecipeScreen> {
   double _rating = 0.0; // Default rating
-  TextEditingController _commentController = TextEditingController();
+  final TextEditingController _commentController = TextEditingController();
 
   // Function to show the loading indicator in a dialog
   void _showLoadingDialog() {
@@ -35,7 +34,7 @@ class _RateRecipeScreenState extends State<RateRecipeScreen> {
               height: 200,
               child: LoadingIndicator(
                   indicatorType: Indicator.ballClipRotatePulse,
-                  colors: const [Color(0xFFD0AD6D)],
+                  colors: [Color(0xFFD0AD6D)],
                   strokeWidth: 2,
                   backgroundColor: Colors.white,
                   pathBackgroundColor: Colors.black)),
@@ -54,7 +53,7 @@ class _RateRecipeScreenState extends State<RateRecipeScreen> {
     _showLoadingDialog(); // Show loading dialog when submission starts
 
     // Simulate an HTTP request for rating submission
-    await Future.delayed(Duration(seconds: 2)); // Simulating a delay
+    await Future.delayed(const Duration(seconds: 2)); // Simulating a delay
 
     // Check if rating and comment are provided
     if (_rating > 0 && _commentController.text.isNotEmpty) {
@@ -71,27 +70,34 @@ class _RateRecipeScreenState extends State<RateRecipeScreen> {
         _hideLoadingDialog(); // Hide the loading dialog after submission
 
         // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Rating submitted successfully!')),
-        );
-        Navigator.pop(context); // Return to the previous screen
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Rating submitted successfully!')),
+          );
+
+          Navigator.pop(context);
+        } // Return to the previous screen
       } catch (e) {
         _hideLoadingDialog(); // Hide loading dialog on error
 
         // Handle any errors
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to submit rating: $e')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to submit rating: $e')),
+          );
+        }
       }
     } else {
       _hideLoadingDialog(); // Hide loading dialog if error occurs
 
       // Show error message if not successful
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                'Failed to submit rating. Please provide a rating and a comment.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Failed to submit rating. Please provide a rating and a comment.')),
+        );
+      }
     }
   }
 
@@ -99,7 +105,7 @@ class _RateRecipeScreenState extends State<RateRecipeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(''),
+        title: const Text(''),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -110,14 +116,14 @@ class _RateRecipeScreenState extends State<RateRecipeScreen> {
               child: Text(
                 textAlign: TextAlign.center,
                 widget.name.toUpperCase(), // Recipe name in uppercase
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFFD0AD6D),
                 ),
               ),
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             Center(
               child: Text(
                 'Please rate the recipe and leave your comments below:', // Instruction
@@ -125,7 +131,7 @@ class _RateRecipeScreenState extends State<RateRecipeScreen> {
                 textAlign: TextAlign.center,
               ),
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             // Star Rating Widget
             Center(
               child: RatingBar.builder(
@@ -134,8 +140,8 @@ class _RateRecipeScreenState extends State<RateRecipeScreen> {
                 direction: Axis.horizontal,
                 allowHalfRating: true,
                 itemCount: 5,
-                itemPadding: EdgeInsets.symmetric(horizontal: 4.0),
-                itemBuilder: (context, _) => Icon(
+                itemPadding: const EdgeInsets.symmetric(horizontal: 4.0),
+                itemBuilder: (context, _) => const Icon(
                   Icons.star,
                   color: Colors.amber,
                 ),
@@ -146,19 +152,19 @@ class _RateRecipeScreenState extends State<RateRecipeScreen> {
                 },
               ),
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             // Comment TextField
             TextField(
               controller: _commentController,
               decoration: InputDecoration(
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 labelText: 'Leave a comment',
                 hintText: 'Your comments here...',
                 hintStyle: TextStyle(color: Colors.grey[400]), // Hint style
               ),
               maxLines: 3, // Allow multi-line comments
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
             // Submit button
             Container(
               width: double.infinity,

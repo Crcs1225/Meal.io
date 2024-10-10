@@ -499,7 +499,7 @@ class _DishState extends State<DishScreen> {
       future: _fetchUserId(),
       builder: (BuildContext context, AsyncSnapshot<String?> snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return CircularProgressIndicator(); // Show loading indicator while fetching
+          return const CircularProgressIndicator(); // Show loading indicator while fetching
         } else if (snapshot.hasError) {
           return Text('Error: ${snapshot.error}'); // Handle error case
         } else if (snapshot.hasData && snapshot.data != null) {
@@ -535,7 +535,8 @@ class _DishState extends State<DishScreen> {
             ),
           );
         } else {
-          return Text('No user ID found.'); // Handle case where userId is null
+          return const Text(
+              'No user ID found.'); // Handle case where userId is null
         }
       },
     );

@@ -23,6 +23,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
 
   Future<void> _register() async {
+    // Check if any field is empty
+    if (_usernameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty ||
+        _passwordController.text.trim().isEmpty ||
+        _confirmPasswordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All fields are required')),
+      );
+      return;
+    }
+
+    // Check if passwords match
     if (_passwordController.text.trim() !=
         _confirmPasswordController.text.trim()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -85,7 +97,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Hello! Sign Up to get\nstarted',
+                'Hello! Sign Up to get started',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 30),
               ),
               const SizedBox(height: 24),
@@ -95,10 +107,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _usernameController,
                   decoration: InputDecoration(
                     labelText: 'Username',
-                    border:
-                        const OutlineInputBorder(borderSide: BorderSide.none),
+                    hintStyle: TextStyle(
+                      color: Colors.grey[500], // Placeholder color
+                    ),
                     filled: true,
-                    fillColor: Colors.grey.withOpacity(0.1),
+                    fillColor: const Color(
+                        0xFFEEF7E8), // Background color of text field
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none, // Remove default border
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF83ABD1), // Blue border when focused
+                        width: 2,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Colors.red, // Red border for error state
+                        width: 2,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -109,10 +145,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _emailController,
                   decoration: InputDecoration(
                     labelText: 'Email',
-                    border:
-                        const OutlineInputBorder(borderSide: BorderSide.none),
+                    hintStyle: TextStyle(
+                      color: Colors.grey[500], // Placeholder color
+                    ),
                     filled: true,
-                    fillColor: Colors.grey.withOpacity(0.1),
+                    fillColor: const Color(
+                        0xFFEEF7E8), // Background color of text field
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none, // Remove default border
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF83ABD1), // Blue border when focused
+                        width: 2,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Colors.red, // Red border for error state
+                        width: 2,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -124,10 +184,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   obscureText: !_passwordVisible,
                   decoration: InputDecoration(
                     labelText: 'Password',
+                    hintStyle: TextStyle(
+                      color: Colors.grey[500], // Placeholder color
+                    ),
                     filled: true,
-                    fillColor: Colors.grey.withOpacity(0.1),
-                    border:
-                        const OutlineInputBorder(borderSide: BorderSide.none),
+                    fillColor: const Color(
+                        0xFFEEF7E8), // Background color of text field
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none, // Remove default border
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF83ABD1), // Blue border when focused
+                        width: 2,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Colors.red, // Red border for error state
+                        width: 2,
+                      ),
+                    ),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _passwordVisible
@@ -151,10 +235,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   obscureText: !_passwordVisible,
                   decoration: InputDecoration(
                     labelText: 'Confirm Password',
+                    hintStyle: TextStyle(
+                      color: Colors.grey[500], // Placeholder color
+                    ),
                     filled: true,
-                    fillColor: Colors.grey.withOpacity(0.1),
-                    border:
-                        const OutlineInputBorder(borderSide: BorderSide.none),
+                    fillColor: const Color(
+                        0xFFEEF7E8), // Background color of text field
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none, // Remove default border
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF83ABD1), // Blue border when focused
+                        width: 2,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Colors.red, // Red border for error state
+                        width: 2,
+                      ),
+                    ),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _passwordVisible

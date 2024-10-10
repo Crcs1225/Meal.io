@@ -34,19 +34,19 @@ class _ProfilePageState extends State<ProfilePage> {
         await FirebaseFirestore.instance.collection('users').doc(userId).get();
 
     if (doc.exists) {
+      print('Document data: ${doc.data()}'); // Log the full document data
       setState(() {
         name = doc['name'] ?? 'name';
         email = doc['email'] ?? 'email';
-        // Convert the Timestamp to DateTime
         DateTime dateOfBirth = (doc['birthday'] as Timestamp).toDate();
-
-        // Format the DateTime to a string like "March 12, 2000"
         birthday = DateFormat('MMMM d, yyyy').format(dateOfBirth);
         weight = doc['weight']?.toInt() ?? 0.0;
         age = doc['age']?.toInt() ?? 0.0;
         height = doc['height']?.toInt() ?? 0.0;
         profilePicture = doc['profilePicture'] ?? '';
       });
+    } else {
+      print('Document does not exist'); // Log if the document doesn't exist
     }
   }
 

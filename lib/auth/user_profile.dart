@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
@@ -16,6 +19,10 @@ class UserProfile extends StatefulWidget {
 }
 
 class _UserProfileState extends State<UserProfile> {
+  final List<String> _preferences = [];
+  List<String> _filteredTags = [];
+  String _searchText = '';
+  Timer? _debounce;
   final PageController _pageController = PageController();
   int _currentPage = 0;
   final ImagePicker _picker = ImagePicker();
@@ -24,15 +31,9 @@ class _UserProfileState extends State<UserProfile> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _heightController = TextEditingController();
   final TextEditingController _weightController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
   DateTime? _selectedDate;
   String? _selectedSex;
-  final List<String> _preferences = [];
-  final List<String> _availablePreferences = [
-    'Vegan',
-    'Vegetarian',
-    'Keto',
-    'Paleo'
-  ];
 
   void _pickImage() async {
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
@@ -57,6 +58,40 @@ class _UserProfileState extends State<UserProfile> {
     }
   }
 
+  // Function to debounce search input
+  void _onSearchChanged(String value) {
+    if (_debounce?.isActive ?? false) _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _searchText = value;
+      });
+      _fetchFilteredTags();
+    });
+  }
+
+  // Function to fetch tags from Firestore collection "tags" based on search input
+  void _fetchFilteredTags() async {
+    if (_searchText.isEmpty) {
+      setState(() {
+        _filteredTags = [];
+      });
+      return;
+    }
+
+    final QuerySnapshot snapshot = await FirebaseFirestore.instance
+        .collection('tags')
+        .where('tag', isGreaterThanOrEqualTo: _searchText)
+        .where('tag',
+            isLessThanOrEqualTo:
+                '$_searchText\uf8ff') // Ensures partial matching
+        .limit(10) // Limit the number of results for performance
+        .get();
+
+    setState(() {
+      _filteredTags = snapshot.docs.map((doc) => doc['tag'] as String).toList();
+    });
+  }
+
   void _nextPage() {
     if (_currentPage == 0) {
       // Validate first page fields
@@ -64,6 +99,7 @@ class _UserProfileState extends State<UserProfile> {
           _selectedDate == null ||
           _heightController.text.isEmpty ||
           _weightController.text.isEmpty ||
+          _usernameController.text.isEmpty ||
           _selectedSex == null) {
         _showErrorDialog('Please fill in all fields.');
         return;
@@ -85,15 +121,6 @@ class _UserProfileState extends State<UserProfile> {
     }
   }
 
-  void _previousPage() {
-    if (_currentPage > 0) {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    }
-  }
-
   Future<void> _completeOnboarding() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
@@ -101,20 +128,43 @@ class _UserProfileState extends State<UserProfile> {
         // Show loading dialog
         _showLoadingDialog();
 
-        // Update user profile
-        await AuthService().updateUserProfile(
-          user.uid,
-          _nameController.text,
-          _selectedDate!,
-          double.parse(_heightController.text),
-          double.parse(_weightController.text),
-          _selectedSex!,
-          _preferences,
-        );
+        // Get the next user ID based on Firestore (custom ID, not Auth UID)
+        String nextUserId = await _getNextUserId();
 
-        // Upload profile picture if available
+        // Prepare user data for Firestore
+        Map<String, dynamic> userProfileData = {
+          'user_id': nextUserId, // Custom user ID
+          'name': _nameController.text,
+          'username': _usernameController
+              .text, // Assuming there's a username controller
+          'age': _calculateAge(
+              _selectedDate!), // Assuming you calculate age based on birthday
+          'birthday': _selectedDate,
+          'email': user.email,
+          'height': double.parse(_heightController.text),
+          'weight': double.parse(_weightController.text),
+          'preferences': _preferences,
+          'sex': _selectedSex,
+          'links': '',
+        };
+
+        // Update user profile in Firestore with custom user ID
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set(userProfileData);
+
+        // Upload profile picture using Firebase Auth UID
+        String? profilePictureUrl;
         if (_profileImage != null) {
-          await AuthService().uploadProfilePicture(user.uid, _profileImage!);
+          profilePictureUrl =
+              await _uploadProfilePicture(user.uid, _profileImage!);
+
+          // Update Firestore with the profile picture link (field: 'links')
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(nextUserId) // The custom user ID, not Auth UID
+              .update({'links': profilePictureUrl});
         }
 
         // Close loading dialog and navigate to homepage
@@ -123,20 +173,70 @@ class _UserProfileState extends State<UserProfile> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-                builder: (context) =>
-                    const Navigation()), // Replace with your home page
+              builder: (context) =>
+                  const Navigation(), // Replace with your home page
+            ),
           );
         }
       }
     } catch (e) {
       // Close loading dialog
       if (mounted) Navigator.pop(context);
+
       // Delete the uploaded profile picture if an error occurs
       User? user = FirebaseAuth.instance.currentUser;
       if (user != null && _profileImage != null) {
         await AuthService().deleteProfilePicture(user.uid);
       }
-      _showErrorDialog('Registration failed. Please try again.');
+
+      _showErrorDialog(
+          'Registration failed. Please try again. ${e.toString()}');
+    }
+  }
+
+// Function to calculate age from birthday
+  int _calculateAge(DateTime birthday) {
+    final now = DateTime.now();
+    int age = now.year - birthday.year;
+    if (now.month < birthday.month ||
+        (now.month == birthday.month && now.day < birthday.day)) {
+      age--;
+    }
+    return age;
+  }
+
+// Method to upload the profile picture to Firebase Storage using Firebase Auth UID
+  Future<String> _uploadProfilePicture(String authUid, File imageFile) async {
+    try {
+      // Create a reference to the location in Firebase Storage using Firebase Auth UID
+      final Reference storageReference =
+          FirebaseStorage.instance.ref().child('users/$authUid/profile.jpg');
+
+      // Upload the file
+      final UploadTask uploadTask = storageReference.putFile(imageFile);
+      final TaskSnapshot snapshot = await uploadTask;
+
+      // Get the download URL
+      final String downloadUrl = await snapshot.ref.getDownloadURL();
+      return downloadUrl;
+    } catch (e) {
+      throw Exception('Failed to upload profile picture: $e');
+    }
+  }
+
+// Method to get the next user ID from Firestore (custom user ID)
+  Future<String> _getNextUserId() async {
+    final QuerySnapshot snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .orderBy('id', descending: true)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isNotEmpty) {
+      final int lastId = snapshot.docs.first['id'] as int;
+      return (lastId + 1).toString(); // Increment the ID for the new user
+    } else {
+      return '1'; // If no users exist, start with ID 1
     }
   }
 
@@ -160,6 +260,12 @@ class _UserProfileState extends State<UserProfile> {
         );
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
   }
 
   void _showErrorDialog(String message) {
@@ -199,12 +305,13 @@ class _UserProfileState extends State<UserProfile> {
                   dotWidth: 36.0,
                   spacing: 16.0,
                   strokeWidth: 1.5,
-                  dotColor: Colors.grey, //change
-                  activeDotColor: Color(0xFFD0AD6D), //change
+                  dotColor: Colors.grey, // Change
+                  activeDotColor: Color(0xFFD0AD6D), // Change
                 ),
               ),
             ),
-            Expanded(
+            // Use Flexible instead of Expanded
+            Flexible(
               child: PageView(
                 controller: _pageController,
                 onPageChanged: (int page) {
@@ -224,34 +331,10 @@ class _UserProfileState extends State<UserProfile> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _currentPage > 0
-                      ? Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(
-                                color: Colors.black.withOpacity(0.3)),
-                            borderRadius: BorderRadius.circular(12.0),
-                          ),
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12.0),
-                              ),
-                            ),
-                            onPressed: _previousPage,
-                            child: const Text(
-                              'Back',
-                              style: TextStyle(color: Colors.black),
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                  const SizedBox(
-                    height: 16,
-                  ),
+                  // Removed back button
+                  const SizedBox.shrink(), // Placeholder for consistency
+
+                  const SizedBox(height: 16),
                   Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
@@ -309,11 +392,73 @@ class _UserProfileState extends State<UserProfile> {
             controller: _nameController,
             decoration: InputDecoration(
               hintText: 'Enter your name',
-              border: const OutlineInputBorder(borderSide: BorderSide.none),
+              hintStyle: TextStyle(
+                color: Colors.grey[500], // Placeholder color
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none, // Remove default border
+              ),
               filled: true,
-              fillColor: Colors.grey.withOpacity(0.1),
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+              fillColor: const Color(0xFFEEF7E8),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                  color: Color(0xFF83ABD1), // Blue border when focused
+                  width: 2,
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                  color: Colors.red, // Red border for error state
+                  width: 2,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(
+            height: 16,
+          ),
+          const Text(
+            '\tUsername',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          TextField(
+            controller: _usernameController, // Ensure this controller exists
+            decoration: InputDecoration(
+              hintText: 'Enter your username',
+              hintStyle: TextStyle(
+                color: Colors.grey[500], // Placeholder color
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none, // Remove default border
+              ),
+              filled: true,
+              fillColor: const Color(0xFFEEF7E8),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                  color: Color(0xFF83ABD1), // Blue border when focused
+                  width: 2,
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                  color: Colors.red, // Red border for error state
+                  width: 2,
+                ),
+              ),
             ),
           ),
           const SizedBox(
@@ -338,12 +483,36 @@ class _UserProfileState extends State<UserProfile> {
                           child: InputDecorator(
                             decoration: InputDecoration(
                               hintText: 'Select Birthday',
-                              border: const OutlineInputBorder(
-                                  borderSide: BorderSide.none),
+                              hintStyle: TextStyle(
+                                color: Colors.grey[500], // Placeholder color
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    BorderSide.none, // Remove default border
+                              ),
                               filled: true,
-                              fillColor: Colors.grey.withOpacity(0.1),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  vertical: 8.0, horizontal: 12.0),
+                              fillColor: const Color(0xFFEEF7E8),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                  color: Color(
+                                      0xFF83ABD1), // Blue border when focused
+                                  width: 2,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide.none,
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                  color:
+                                      Colors.red, // Red border for error state
+                                  width: 2,
+                                ),
+                              ),
                             ),
                             child: Text(
                               _selectedDate == null
@@ -378,13 +547,33 @@ class _UserProfileState extends State<UserProfile> {
                     ),
                     InputDecorator(
                       decoration: InputDecoration(
-                        border: const OutlineInputBorder(
-                            borderSide: BorderSide.none),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none, // Remove default border
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color:
+                                Color(0xFF83ABD1), // Blue border when focused
+                            width: 2,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Colors.red, // Red border for error state
+                            width: 2,
+                          ),
+                        ),
                         filled: true,
-                        fillColor: Colors.grey.withOpacity(0.1),
+                        fillColor: const Color(0xFFEEF7E8),
                         contentPadding: const EdgeInsets.symmetric(
                             vertical: 0.0, horizontal: 12.0),
-                        isDense: true,
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
@@ -413,40 +602,104 @@ class _UserProfileState extends State<UserProfile> {
           const SizedBox(
             height: 16,
           ),
-          const Text(
-            '\tHeight',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          TextField(
-            controller: _heightController,
-            decoration: InputDecoration(
-              hintText: 'Enter height (cm)',
-              border: const OutlineInputBorder(borderSide: BorderSide.none),
-              filled: true,
-              fillColor: Colors.grey.withOpacity(0.1),
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-            ),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(
-            height: 16,
-          ),
-          const Text(
-            '\tWeight',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          TextField(
-            controller: _weightController,
-            decoration: InputDecoration(
-              hintText: 'Enter weight (kg)',
-              border: const OutlineInputBorder(borderSide: BorderSide.none),
-              filled: true,
-              fillColor: Colors.grey.withOpacity(0.1),
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-            ),
-            keyboardType: TextInputType.number,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Height',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    TextField(
+                      controller: _heightController,
+                      decoration: InputDecoration(
+                        hintText: 'cm',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[500], // Placeholder color
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFEEF7E8),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none, // Remove default border
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color:
+                                Color(0xFF83ABD1), // Blue border when focused
+                            width: 2,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Colors.red, // Red border for error state
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16.0),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Weight',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    TextField(
+                      controller: _weightController,
+                      decoration: InputDecoration(
+                        hintText: 'kg',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[500], // Placeholder color
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFEEF7E8),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none, // Remove default border
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color:
+                                Color(0xFF83ABD1), // Blue border when focused
+                            width: 2,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide.none,
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                            color: Colors.red, // Red border for error state
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -454,44 +707,85 @@ class _UserProfileState extends State<UserProfile> {
   }
 
   Widget _buildPreferencesPage() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Title and description
-          const Text(
-            "What's your preference?",
-            style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8.0),
-          const Text(
-            'Select your dietary preferences from the list below. This will help us recommend recipes that fit your dietary needs.',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-          const SizedBox(height: 16.0), // Space between description and list
-
-          // Preferences list
-          Expanded(
-            child: ListView(
-              children: _availablePreferences.map((preference) {
-                return CheckboxListTile(
-                  title: Text(preference),
-                  value: _preferences.contains(preference),
-                  onChanged: (bool? value) {
-                    setState(() {
-                      if (value == true) {
-                        _preferences.add(preference);
-                      } else {
-                        _preferences.remove(preference);
-                      }
-                    });
-                  },
-                );
-              }).toList(),
+    return Scaffold(
+      // Ensure the layout resizes when the keyboard is shown
+      resizeToAvoidBottomInset: true,
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title and description
+            const Text(
+              "What's your preference?",
+              style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
             ),
-          ),
-        ],
+            const SizedBox(height: 8.0),
+            const Text(
+              'Select your dietary preferences.',
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+            const SizedBox(
+                height: 16.0), // Space between description and search box
+
+            // Search field
+            TextField(
+              decoration: InputDecoration(
+                labelText: 'Search for tags',
+                hintStyle: TextStyle(
+                  color: Colors.grey[500], // Placeholder color
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none, // Remove default border
+                ),
+                filled: true,
+                fillColor: const Color(0xFFEEF7E8),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF83ABD1), // Blue border when focused
+                    width: 2,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(
+                    color: Colors.red, // Red border for error state
+                    width: 2,
+                  ),
+                ),
+              ),
+              onChanged: _onSearchChanged,
+            ),
+            const SizedBox(height: 16.0), // Space between search box and list
+
+            // Use ListView for preferences
+            Expanded(
+              child: ListView(
+                children: _filteredTags.map((preference) {
+                  return CheckboxListTile(
+                    title: Text(preference),
+                    value: _preferences.contains(preference),
+                    onChanged: (bool? value) {
+                      setState(() {
+                        if (value == true) {
+                          _preferences.add(preference);
+                        } else {
+                          _preferences.remove(preference);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

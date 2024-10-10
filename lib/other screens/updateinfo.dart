@@ -250,8 +250,33 @@ class UpdateProfileScreenState extends State<UpdateProfileScreen> {
           controller: controller,
           decoration: InputDecoration(
             labelText: label,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
-            border: InputBorder.none,
+            hintStyle: TextStyle(
+              color: Colors.grey[500], // Placeholder color
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none, // Remove default border
+            ),
+            filled: true,
+            fillColor: const Color(0xFFEEF7E8),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF83ABD1), // Blue border when focused
+                width: 2,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Colors.red, // Red border for error state
+                width: 2,
+              ),
+            ),
           ),
           keyboardType: keyboardType,
         ),

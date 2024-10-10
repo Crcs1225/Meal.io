@@ -365,7 +365,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _fetchUserPreferences() async {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
-
+      print(currentUser);
       if (currentUser != null) {
         DocumentSnapshot userDoc = await FirebaseFirestore.instance
             .collection('users')

@@ -78,10 +78,34 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _emailController,
                   decoration: InputDecoration(
                     labelText: 'Enter your email',
-                    border:
-                        const OutlineInputBorder(borderSide: BorderSide.none),
+                    hintStyle: TextStyle(
+                      color: Colors.grey[500], // Placeholder color
+                    ),
                     filled: true,
-                    fillColor: Colors.grey.withOpacity(0.1),
+                    fillColor: const Color(
+                        0xFFEEF7E8), // Background color of text field
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none, // Remove default border
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF83ABD1), // Blue border when focused
+                        width: 2,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Colors.red, // Red border for error state
+                        width: 2,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -93,10 +117,35 @@ class _LoginScreenState extends State<LoginScreen> {
                   obscureText: !_passwordVisible,
                   decoration: InputDecoration(
                     labelText: 'Enter your password',
+                    hintStyle: TextStyle(
+                      color: Colors.grey[500], // Placeholder color
+                    ),
                     filled: true,
-                    fillColor: Colors.grey.withOpacity(0.1),
-                    border:
-                        const OutlineInputBorder(borderSide: BorderSide.none),
+                    fillColor: const Color(
+                        0xFFEEF7E8), // Background color of text field
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none, // Remove default border
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF83ABD1), // Blue border when focused
+                        width: 2,
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(
+                        color: Colors.red, // Red border for error state
+                        width: 2,
+                      ),
+                    ),
+
                     suffixIcon: IconButton(
                       icon: Icon(
                         _passwordVisible

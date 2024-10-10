@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:meal_planner/auth/pick.dart';
 import 'package:meal_planner/nav%20screens/nav.dart';
@@ -39,11 +40,43 @@ class SplashScreenState extends State<SplashScreen> {
       } else {
         if (mounted) {
           if (user != null) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const Navigation()),
-            );
+            // Check if the user document has the "username" field in Firestore
+            DocumentSnapshot userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .get();
+
+            if (userDoc.exists && userDoc.data() != null) {
+              Map<String, dynamic> userData =
+                  userDoc.data() as Map<String, dynamic>;
+              if (userData.containsKey('username')) {
+                // Field exists, navigate to Navigation screen
+                if (mounted) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const Navigation()),
+                  );
+                }
+              } else {
+                // Field does not exist, navigate to PickScreen
+                if (mounted) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const PickScreen()),
+                  );
+                }
+              }
+            } else {
+              logger.w('User document does not exist or is null.');
+              if (mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const PickScreen()),
+                );
+              }
+            }
           } else {
+            // User is not logged in, navigate to PickScreen
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const PickScreen()),
