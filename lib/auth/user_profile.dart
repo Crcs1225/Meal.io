@@ -163,7 +163,7 @@ class _UserProfileState extends State<UserProfile> {
           // Update Firestore with the profile picture link (field: 'links')
           await FirebaseFirestore.instance
               .collection('users')
-              .doc(nextUserId) // The custom user ID, not Auth UID
+              .doc(user.uid) // The custom user ID, not Auth UID
               .update({'links': profilePictureUrl});
         }
 

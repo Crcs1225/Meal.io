@@ -678,47 +678,65 @@ class _HomePageState extends State<HomePage> {
                               );
                             },
                             child: Card(
-                              elevation:
-                                  4.0, // Add elevation for card-like appearance
+                              elevation: 4.0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12.0),
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.all(8.0),
+                                padding: const EdgeInsets.all(16.0),
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      height: 80, // Adjust height as needed
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[200],
-                                        borderRadius:
-                                            BorderRadius.circular(12.0),
-                                      ),
-                                      child: const Center(
-                                        child: Icon(
-                                          Icons.fastfood,
-                                          size: 40,
-                                          color: Colors.grey,
+                                    Expanded(
+                                      // This will make the image/icon container take remaining space
+                                      child: dish['links'] != null &&
+                                              dish['links'].isNotEmpty
+                                          ? Container(
+                                              width: double.infinity,
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(12.0),
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(12.0),
+                                                child: Image.network(
+                                                  dish['links'],
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            )
+                                          : Center(
+                                              // Icon will be centered in the remaining space
+                                              child: Icon(
+                                                Icons.fastfood,
+                                                size: 40,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                    ),
+                                    const SizedBox(height: 16.0),
+                                    // Text section always at the bottom
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          (dish['name'] ?? '').toUpperCase(),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8.0),
-                                    Text(
-                                      (dish['name'] ?? '').toUpperCase(),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 4.0),
-                                    Text(
-                                      'Rating: ${(dish['rating']?.toStringAsFixed(1) ?? '0.0')}',
-                                      style: const TextStyle(
-                                        color: Colors.black,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
+                                        const SizedBox(height: 4.0),
+                                        Text(
+                                          'Rating: ${(dish['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                                          style: const TextStyle(
+                                            color: Colors.black,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -766,7 +784,7 @@ class _HomePageState extends State<HomePage> {
                     child: CircularProgressIndicator(),
                   )
                 : SizedBox(
-                    height: 200, // Adjust height as needed
+                    height: 275, // Adjust height as needed
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       itemCount: _recommendedTagRecipes
@@ -782,7 +800,7 @@ class _HomePageState extends State<HomePage> {
                         return Container(
                           margin: const EdgeInsets.only(
                               right: 8.0), // Space between items
-                          width: 150, // Adjust width as needed
+                          width: 200, // Adjust width as needed
                           child: GestureDetector(
                             onTap: () {
                               // Handle onTap event
@@ -795,49 +813,65 @@ class _HomePageState extends State<HomePage> {
                               );
                             },
                             child: Card(
-                              elevation:
-                                  4.0, // Add elevation for card-like appearance
+                              elevation: 4.0,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                    12.0), // Rounded corners
+                                borderRadius: BorderRadius.circular(12.0),
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.all(8.0),
+                                padding: const EdgeInsets.all(16.0),
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      height: 80, // Adjust height as needed
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[200],
-                                        borderRadius: BorderRadius.circular(
-                                            12.0), // Rounded corners
-                                      ),
-                                      child: const Center(
-                                        child: Icon(Icons.fastfood,
-                                            size: 40,
-                                            color: Colors
-                                                .grey), // Placeholder for image
-                                      ),
+                                    Expanded(
+                                      // This will make the image/icon container take remaining space
+                                      child: recipe['links'] != null &&
+                                              recipe['links'].isNotEmpty
+                                          ? Container(
+                                              width: double.infinity,
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(12.0),
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(12.0),
+                                                child: Image.network(
+                                                  recipe['links'],
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            )
+                                          : Center(
+                                              // Icon will be centered in the remaining space
+                                              child: Icon(
+                                                Icons.fastfood,
+                                                size: 40,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
                                     ),
-                                    const SizedBox(height: 8.0),
-                                    Text(
-                                      (recipe['name'] ?? '')
-                                          .toUpperCase(), // Convert text to uppercase
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black,
-                                      ),
-                                      overflow: TextOverflow
-                                          .ellipsis, // Prevent text overflow
-                                    ),
-                                    const SizedBox(height: 4.0),
-                                    Text(
-                                      'Rating: ${recipe['rating'] ?? ''}',
-                                      style: const TextStyle(
-                                        color: Colors.black,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
+                                    const SizedBox(height: 16.0),
+                                    // Text section always at the bottom
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          (recipe['name'] ?? '').toUpperCase(),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 4.0),
+                                        Text(
+                                          'Rating: ${(recipe['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                                          style: const TextStyle(
+                                            color: Colors.black,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -997,7 +1031,7 @@ class _HomePageState extends State<HomePage> {
   // Widget to display the recommendation list
   Widget _buildRecommendationListIngredients() {
     return SizedBox(
-      height: 200,
+      height: 275,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: _recommendations.length,
@@ -1021,30 +1055,60 @@ class _HomePageState extends State<HomePage> {
               child: Card(
                 elevation: 4.0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
+                  borderRadius: BorderRadius.circular(12.0),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        recommendation['name'] ?? 'Recipe Name',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16.0,
-                        ),
+                      Expanded(
+                        // This will make the image/icon container take remaining space
+                        child: recommendation['links'] != null &&
+                                recommendation['links'].isNotEmpty
+                            ? Container(
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12.0),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12.0),
+                                  child: Image.network(
+                                    recommendation['links'],
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              )
+                            : Center(
+                                // Icon will be centered in the remaining space
+                                child: Icon(
+                                  Icons.fastfood,
+                                  size: 40,
+                                  color: Colors.grey,
+                                ),
+                              ),
                       ),
-                      const SizedBox(height: 8.0),
-                      Text(
-                        recommendation['description'] ?? 'Description',
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8.0),
-                      Text(
-                        'Rating: ${recommendation['rating'] ?? 'N/A'}',
-                        style: const TextStyle(color: Colors.grey),
+                      const SizedBox(height: 16.0),
+                      // Text section always at the bottom
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            (recommendation['name'] ?? '').toUpperCase(),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4.0),
+                          Text(
+                            'Rating: ${(recommendation['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                            style: const TextStyle(
+                              color: Colors.black,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -1067,7 +1131,7 @@ class _HomePageState extends State<HomePage> {
   // Widget to display the recommendation list
   Widget _buildRecommendationListTags() {
     return SizedBox(
-      height: 200,
+      height: 275,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: _tags.length,
@@ -1090,43 +1154,60 @@ class _HomePageState extends State<HomePage> {
               child: Card(
                 elevation: 4.0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
+                  borderRadius: BorderRadius.circular(12.0),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(8.0),
+                  padding: const EdgeInsets.all(16.0),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        height: 100, // Adjust height as needed
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(12.0),
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.fastfood,
-                            size: 40,
-                            color: Colors.grey,
+                      Expanded(
+                        // This will make the image/icon container take remaining space
+                        child: recommendation['links'] != null &&
+                                recommendation['links'].isNotEmpty
+                            ? Container(
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12.0),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12.0),
+                                  child: Image.network(
+                                    recommendation['links'],
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              )
+                            : Center(
+                                // Icon will be centered in the remaining space
+                                child: Icon(
+                                  Icons.fastfood,
+                                  size: 40,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                      ),
+                      const SizedBox(height: 16.0),
+                      // Text section always at the bottom
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            (recommendation['name'] ?? '').toUpperCase(),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 8.0),
-                      Text(
-                        (recommendation['name'] ?? '').toUpperCase(),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4.0),
-                      Text(
-                        'Rating: ${(recommendation['rating']?.toStringAsFixed(1) ?? '0.0')}',
-                        style: const TextStyle(
-                          color: Colors.black,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                          const SizedBox(height: 4.0),
+                          Text(
+                            'Rating: ${(recommendation['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                            style: const TextStyle(
+                              color: Colors.black,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ],
                   ),

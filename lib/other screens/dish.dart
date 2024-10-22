@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 
@@ -374,7 +373,7 @@ class _DishState extends State<DishScreen> {
                                 color: Color(0xFF564F4F))),
                       ),
                       // Nutritional Information pie chart
-                      _buildPieChart(nutritionalInfo),
+                      _buildNutritionalInfoCards(nutritionalInfo),
 
                       const SizedBox(height: 24),
                       _buildRateRecipes(id, dishName),
@@ -389,109 +388,76 @@ class _DishState extends State<DishScreen> {
     );
   }
 
-  // Helper function to build nutritional info card
-  Widget _buildPieChart(Map<String, double> nutritionalInfo) {
-    List<PieChartSectionData> pieChartSections =
-        nutritionalInfo.entries.map((entry) {
-      final color = _getPieChartColor(
-          entry.key); // Use your existing method to get colors
-      return PieChartSectionData(
-        value: entry.value, // Nutritional value (percentage or actual)
-        title: '', // Hide the title inside the pie chart, if you want
-        color: color,
-        radius: 50,
-        titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-      );
-    }).toList();
+  // Helper function to build nutritional info cards in a 2x2 grid
+  Widget _buildNutritionalInfoCards(Map<String, double> nutritionalInfo) {
+    final nutritionItems = [
+      {
+        'label': 'Carbs',
+        'value': nutritionalInfo['Carbohydrates'] ?? 0.0,
+        'imagePath': 'assets/Carbohydrates.png',
+      },
+      {
+        'label': 'Protein',
+        'value': nutritionalInfo['Protein'] ?? 0.0,
+        'imagePath': 'assets/Proteins.png',
+      },
+      {
+        'label': 'Fats',
+        'value': nutritionalInfo['Fat'] ?? 0.0,
+        'imagePath': 'assets/Fats.png',
+      },
+      {
+        'label': 'Calories',
+        'value': nutritionalInfo['Calories'] ?? 0.0,
+        'imagePath': 'assets/Calories.png',
+      },
+    ];
 
-    return Row(
-      children: [
-        SizedBox(
-          height: 200,
-          width: 200,
-          child: pieChartSections.isNotEmpty
-              ? PieChart(
-                  PieChartData(
-                    sections: pieChartSections,
-                    centerSpaceRadius: 40,
-                    sectionsSpace: 0,
-                    startDegreeOffset: 90,
-                    borderData: FlBorderData(show: false),
-                  ),
-                )
-              : const Center(
-                  child: Text(
-                    'No nutritional data available',
-                    textAlign: TextAlign.center,
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 16,
+      crossAxisSpacing: 16,
+      padding: const EdgeInsets.all(16),
+      children: nutritionItems.map((item) {
+        return Card(
+          elevation: 2.0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0), // Increased padding
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  item['imagePath'] as String, // Ensure type is String
+                  height: 50, // Increased image size for better visibility
+                  width: 50,
+                ),
+                const SizedBox(height: 16), // Increased spacing
+                Text(
+                  item['label'] as String, // Ensure type is String
+                  style: const TextStyle(
+                    fontSize: 16, // Larger font size
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-        ),
-        const SizedBox(width: 16.0),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: nutritionalInfo.entries.map((entry) {
-            final color = _getPieChartColor(entry.key);
-            return Container(
-              padding: const EdgeInsets.symmetric(
-                  vertical: 4.0), // Add some padding if needed
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment
-                    .spaceBetween, // Align the text on the left and value on the right
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: color,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        entry.key, // Nutritional label on the left side
-                        style: const TextStyle(
-                          fontSize: 8,
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 8),
+                Text(
+                  '${item['value']?.toString() ?? 0.0}g', // Convert value to string
+                  style: const TextStyle(
+                    fontSize: 16, // Larger font size
+                    color: Colors.black54,
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${entry.value}', // The value aligned to the right
-                    style: const TextStyle(
-                        fontSize: 8, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        ),
-      ],
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
-  }
-
-  // Example function to map colors for different nutrients
-  Color _getPieChartColor(String nutrient) {
-    switch (nutrient) {
-      case 'Calories':
-        return Colors.orange;
-      case 'Total Fat':
-        return Colors.red;
-      case 'Sugar':
-        return Colors.pink;
-      case 'Sodium':
-        return Colors.blue;
-      case 'Protein':
-        return Colors.green;
-      case 'Saturated Fat':
-        return Colors.purple;
-      case 'Carbohydrates':
-        return Colors.yellow;
-      default:
-        return Colors.grey;
-    }
   }
 
   Widget _buildRateRecipes(int recipeId, String name) {

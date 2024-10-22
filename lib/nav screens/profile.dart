@@ -43,7 +43,7 @@ class _ProfilePageState extends State<ProfilePage> {
         weight = doc['weight']?.toInt() ?? 0.0;
         age = doc['age']?.toInt() ?? 0.0;
         height = doc['height']?.toInt() ?? 0.0;
-        profilePicture = doc['profilePicture'] ?? '';
+        profilePicture = doc['links'] ?? '';
       });
     } else {
       print('Document does not exist'); // Log if the document doesn't exist

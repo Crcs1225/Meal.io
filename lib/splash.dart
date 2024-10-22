@@ -7,6 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:logger/logger.dart';
 
+import 'utility/config.dart';
+
 final Logger logger = Logger();
 
 class SplashScreen extends StatefulWidget {
@@ -25,6 +27,14 @@ class SplashScreenState extends State<SplashScreen> {
 
   Future<void> _checkAppState() async {
     try {
+      String? serverIp = await FlaskServerFinder.findFlaskServer(5000);
+      if (serverIp != null) {
+        logger.i('Flask server found at $serverIp');
+        Config.setMaster(serverIp); // Update the Config with the dynamic IP
+      } else {
+        logger.w('No Flask server found. Using default IP.');
+      }
+
       SharedPreferences prefs = await SharedPreferences.getInstance();
       bool isFirstLaunch = prefs.getBool('isFirstLaunch') ?? true;
       User? user = FirebaseAuth.instance.currentUser;

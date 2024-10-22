@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 
@@ -985,9 +984,6 @@ class _NewRecipeState extends State<NewRecipe> {
       'Carbohydrates': _carbohydratesController.text,
     };
 
-    final List<PieChartSectionData> pieChartSections =
-        _createPieChartSections(nutritionalInfo);
-
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -1159,74 +1155,63 @@ class _NewRecipeState extends State<NewRecipe> {
                             fontSize: 12,
                             color: Color(0xFF564F4F))),
                   ),
-                  // Nutritional chart and other content
+                  // Replace the existing Row code with this
                   Row(
-                    children: [
-                      SizedBox(
-                        height: 200,
-                        width:
-                            200, // Adjust this width or remove it to fit content
-                        child: pieChartSections.isNotEmpty
-                            ? PieChart(
-                                PieChartData(
-                                  sections: pieChartSections,
-                                  centerSpaceRadius: 40,
-                                  sectionsSpace: 0,
-                                  startDegreeOffset: 90,
-                                  borderData: FlBorderData(show: false),
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceEvenly, // Space out items evenly
+                    children: nutritionalInfo.entries.map((entry) {
+                      return SizedBox(
+                        width: 120, // Fixed width for uniformity
+                        child: Card(
+                          elevation: 2.0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(
+                                8.0), // Adjusted padding for smaller cards
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                // Use a valid path for your nutritional images
+                                Image.asset(
+                                  _getImagePath(entry
+                                      .key), // Function to retrieve image path
+                                  height:
+                                      30, // Adjusted image size for smaller display
+                                  width: 30,
                                 ),
-                              )
-                            : const Center(
-                                child: Text(
-                                  'No nutritional data available',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 14.0),
-                                  softWrap: true,
-                                  overflow: TextOverflow.clip,
+                                const SizedBox(
+                                    height:
+                                        8), // Spacing between image and text
+                                Text(
+                                  entry.key, // Nutritional label
+                                  style: const TextStyle(
+                                    fontSize: 14, // Smaller font size
+                                  ),
+                                  textAlign:
+                                      TextAlign.center, // Center align the text
+                                  overflow: TextOverflow
+                                      .ellipsis, // Handle overflow for long text
                                 ),
-                              ),
-                      ),
-                      const SizedBox(width: 16.0),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: nutritionalInfo.entries.map((entry) {
-                          final color = _getPieChartColor(entry.key);
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: color,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.3),
-                                      offset: const Offset(0, 2),
-                                      blurRadius: 2,
-                                    ),
-                                  ],
+                                const SizedBox(
+                                    height:
+                                        4), // Spacing between label and value
+                                Text(
+                                  '${entry.value}g', // Nutritional value with unit
+                                  style: const TextStyle(
+                                    fontSize: 14, // Smaller font size
+                                    color: Colors.black54,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                entry.key,
-                                style: const TextStyle(
-                                    fontSize: 8.0, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                entry.value,
-                                style: const TextStyle(
-                                    fontSize: 8, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          );
-                        }).toList(),
-                      ),
-                    ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
                   ),
+
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16.0),
                     child: Divider(
@@ -1243,38 +1228,18 @@ class _NewRecipeState extends State<NewRecipe> {
     );
   }
 
-  List<PieChartSectionData> _createPieChartSections(
-      Map<String, String> nutritionalInfo) {
-    if (nutritionalInfo.isEmpty) return [];
-
-    return nutritionalInfo.entries.where((entry) {
-      final double value = double.tryParse(entry.value) ?? 0;
-      return value > 0; // Only include non-zero values
-    }).map((entry) {
-      final double value = double.tryParse(entry.value) ?? 0;
-      return PieChartSectionData(
-        color: _getPieChartColor(entry.key),
-        value: value,
-        title: '',
-        radius: 40,
-        titleStyle: const TextStyle(fontSize: 12, color: Colors.white),
-      );
-    }).toList();
-  }
-
-  Color _getPieChartColor(String key) {
-    // Provide colors for different nutritional content
+  String _getImagePath(String key) {
     switch (key) {
       case 'Calories':
-        return Colors.green;
+        return 'assets/Calories.png'; // Adjust path as necessary
       case 'Fat':
-        return Colors.red;
+        return 'assets/Fats.png';
       case 'Protein':
-        return Colors.pink;
+        return 'assets/Proteins.png';
       case 'Carbohydrates':
-        return Colors.blue;
+        return 'assets/Carbohydrates.png';
       default:
-        return Colors.grey;
+        return 'assets/tagline.png'; // A default image if needed
     }
   }
 }
