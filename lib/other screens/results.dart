@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -8,8 +9,9 @@ import '../utility/config.dart';
 
 class Results extends StatefulWidget {
   final List<String> ingredients;
-
-  const Results({super.key, required this.ingredients});
+  final File annotatedImage;
+  const Results(
+      {super.key, required this.ingredients, required this.annotatedImage});
 
   @override
   State<Results> createState() => _ResultsState();
@@ -18,6 +20,28 @@ class Results extends StatefulWidget {
 class _ResultsState extends State<Results> {
   bool _loading = false;
   List<dynamic> _recommendations = [];
+  File? _localAnnotatedImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _localAnnotatedImage = widget
+        .annotatedImage; // Assign the passed image file to a local variable
+  }
+
+  @override
+  void dispose() {
+    _disposeImageFile(); // Call dispose image method
+    super.dispose();
+  }
+
+  Future<void> _disposeImageFile() async {
+    if (_localAnnotatedImage != null && await _localAnnotatedImage!.exists()) {
+      await _localAnnotatedImage!.delete(); // Delete the image file
+      _localAnnotatedImage = null; // Clear reference
+      print("Annotated image file disposed.");
+    }
+  }
 
   Future<String?> _fetchUserId() async {
     try {
@@ -108,21 +132,56 @@ class _ResultsState extends State<Results> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3, // Number of columns in the grid
-                childAspectRatio:
-                    3, // Aspect ratio of each item to adjust height
-                mainAxisSpacing: 8, // Vertical space between items
-                crossAxisSpacing: 8, // Horizontal space between items
+            Container(
+              width: double.infinity, // Make it full width
+              height: MediaQuery.of(context)
+                  .size
+                  .width, // Set height equal to width for a square
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(
+                    16.0), // Set your desired border radius
+                // Ensure the border radius clips the image
               ),
-              itemCount: widget.ingredients.length,
-              itemBuilder: (context, index) {
-                return buildScannedIngredient(widget.ingredients[index]);
-              },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(
+                    16.0), // Match this with the container's border radius
+                child: Image.file(
+                  _localAnnotatedImage!,
+                  fit: BoxFit.cover, // Ensure the image covers the container
+                ),
+              ),
             ),
+            const SizedBox(height: 10),
+            widget.ingredients.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No ingredients found.',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color:
+                            Colors.grey, // You can change the color as needed
+                      ),
+                    ),
+                  )
+                : GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3, // Number of columns in the grid
+                      childAspectRatio:
+                          3, // Aspect ratio of each item to adjust height
+                      mainAxisSpacing: 8, // Vertical space between items
+                      crossAxisSpacing: 8, // Horizontal space between items
+                    ),
+                    itemCount: widget.ingredients.length,
+                    itemBuilder: (context, index) {
+                      return buildScannedIngredient(widget.ingredients[index]);
+                    },
+                  ),
+            const SizedBox(height: 20),
+            Divider(),
             const SizedBox(height: 20),
             Center(
               child: ElevatedButton(
@@ -150,10 +209,12 @@ class _ResultsState extends State<Results> {
                     ? GridView.builder(
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 8.0,
-                          mainAxisSpacing: 8.0,
-                          childAspectRatio: 0.8,
+                          crossAxisCount: 2, // Number of items per row
+                          crossAxisSpacing:
+                              8.0, // Space between items horizontally
+                          mainAxisSpacing:
+                              8.0, // Space between items vertically
+                          childAspectRatio: 0.8, // Aspect ratio of the cards
                         ),
                         itemCount: _recommendations.length,
                         shrinkWrap: true,
@@ -171,7 +232,8 @@ class _ResultsState extends State<Results> {
                                 ),
                                 context: context,
                                 builder: (context) => DishScreen(
-                                  recipeData: dish,
+                                  recipeData:
+                                      dish, // Pass the entire dish object
                                 ),
                               );
                             },
@@ -181,41 +243,60 @@ class _ResultsState extends State<Results> {
                                 borderRadius: BorderRadius.circular(12.0),
                               ),
                               child: Padding(
-                                padding: const EdgeInsets.all(8.0),
+                                padding: const EdgeInsets.all(16.0),
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      height: 80,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey[200],
-                                        borderRadius:
-                                            BorderRadius.circular(12.0),
-                                      ),
-                                      child: const Center(
-                                        child: Icon(
-                                          Icons.fastfood,
-                                          size: 40,
-                                          color: Colors.grey,
+                                    Expanded(
+                                      // This will make the image/icon container take remaining space
+                                      child: dish['links'] != null &&
+                                              dish['links'].isNotEmpty
+                                          ? Container(
+                                              width: double.infinity,
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(12.0),
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(12.0),
+                                                child: Image.network(
+                                                  dish['links'],
+                                                  fit: BoxFit.cover,
+                                                ),
+                                              ),
+                                            )
+                                          : Center(
+                                              // Icon will be centered in the remaining space
+                                              child: Icon(
+                                                Icons.fastfood,
+                                                size: 40,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                    ),
+                                    const SizedBox(height: 16.0),
+                                    // Text section always at the bottom
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          (dish['name'] ?? '').toUpperCase(),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.black,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8.0),
-                                    Text(
-                                      (dish['name'] ?? '').toUpperCase(),
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 4.0),
-                                    Text(
-                                      'Rating: ${(dish['rating']?.toStringAsFixed(1) ?? '0.0')}',
-                                      style: const TextStyle(
-                                        color: Colors.black,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
+                                        const SizedBox(height: 4.0),
+                                        Text(
+                                          'Rating: ${(dish['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                                          style: const TextStyle(
+                                            color: Colors.black,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
