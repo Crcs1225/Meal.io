@@ -101,10 +101,24 @@ class SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: Color(0xFF83ABD1),
+    return Scaffold(
+      backgroundColor: const Color(0xFF83ABD1),
       body: Center(
-        child: CircularProgressIndicator(),
+        child: Column(
+          mainAxisSize:
+              MainAxisSize.min, // Centers the content within the Column
+          children: [
+            // Display the image icon from assets
+            Image.asset(
+              'assets/icon1.png', // Update with the actual path to your icon image
+              width: 200, // Adjust the size as needed
+              height: 200,
+            ),
+            const SizedBox(
+                height: 20), // Add spacing between the icon and indicator
+            const CircularProgressIndicator(color: Colors.white),
+          ],
+        ),
       ),
     );
   }
