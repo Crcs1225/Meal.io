@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-
+import 'package:http/http.dart' as http;
+import '../utility/config.dart';
 import '../utility/rate.dart';
 
 class DishScreen extends StatefulWidget {
@@ -28,6 +29,8 @@ class _DishState extends State<DishScreen> {
   List<String> steps = [];
   String link = '';
   String desc = '';
+  bool _isLoading = false;
+  List _recommendedTagRecipes = [];
 
   Future<String?> _fetchUserId() async {
     try {
@@ -68,6 +71,7 @@ class _DishState extends State<DishScreen> {
     super.initState();
     _loadRecipeData();
     _fetchUserId();
+    _fetchTagBasedRecommendations();
     nutritionalInfo = _extractNutritionalInfo(widget.recipeData);
   }
 
@@ -82,6 +86,37 @@ class _DishState extends State<DishScreen> {
     };
 
     return extractedNutritionalInfo;
+  }
+
+  final Map<String, String?> imageCache = {};
+
+  Future<String?> fetchImageFromPexels(String query) async {
+    // Check if the image is already in the cache
+    if (imageCache.containsKey(query)) {
+      return imageCache[query];
+    }
+
+    const String apiKey =
+        'SXnk2AcnWw2EEyr5CHP5ICwGbNrtcEH8xLogi6RO8bsYb2TgYPaR9b8Y';
+    final url =
+        Uri.parse('https://api.pexels.com/v1/search?query=$query&per_page=1');
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': apiKey,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['photos'] != null && data['photos'].isNotEmpty) {
+        final imageUrl = data['photos'][0]['src']['medium'];
+        imageCache[query] = imageUrl; // Cache the fetched image URL
+        return imageUrl;
+      }
+    }
+    imageCache[query] = null; // Cache null if no image is found
+    return null;
   }
 
   void _loadRecipeData() {
@@ -136,6 +171,45 @@ class _DishState extends State<DishScreen> {
     return [];
   }
 
+  Future<void> _fetchTagBasedRecommendations() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final url = Uri.parse(Config.tag);
+
+    try {
+      String? userId = await _fetchUserId();
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          'tags': tags,
+          'user_id': userId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> responseBody = jsonDecode(response.body);
+        setState(() {
+          _recommendedTagRecipes = responseBody.cast<Map<String, dynamic>>();
+          _isLoading = false;
+        });
+      } else {
+        print(
+            'Failed to get tag-based recommendations. Status code: ${response.statusCode}');
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching tag-based recommendations: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -152,26 +226,76 @@ class _DishState extends State<DishScreen> {
                 decoration: BoxDecoration(
                   color: link.isEmpty
                       ? Colors.grey
-                      : null, // If link is null or empty, set color to grey
+                      : null, // Set color to grey if link is empty
                   image: link.isNotEmpty
                       ? DecorationImage(
                           image: NetworkImage(link),
                           fit: BoxFit.cover,
                         )
-                      : null, // If link is empty, no image will be used
+                      : null, // Use provided link if available, otherwise fetch image
                 ),
                 child: Stack(
                   children: [
+                    link.isEmpty
+                        ? FutureBuilder<String?>(
+                            future: fetchImageFromPexels(dishName),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Center(
+                                  child: CircularProgressIndicator(),
+                                );
+                              } else if (snapshot.hasData &&
+                                  snapshot.data != null) {
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    image: DecorationImage(
+                                      image: NetworkImage(snapshot.data!),
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                // Display grey container with a message if no image is found
+                                return const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.image_not_supported,
+                                          color: Colors.white, size: 50),
+                                      SizedBox(height: 10),
+                                      Text(
+                                        'No image available',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                            },
+                          )
+                        : Container(), // Placeholder for when the link is not empty
                     Positioned(
-                        top: 16,
-                        right: 16,
+                      top: 16,
+                      right: 16,
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle, // Make the container circular
+                          color: Colors.white, // Background color
+                        ),
                         child: IconButton(
                           onPressed: () {
                             Navigator.pop(context);
                           },
-                          icon: const Icon(Ionicons.close),
-                          color: Colors.white,
-                        )),
+                          icon: const Icon(
+                            Ionicons.close,
+                            color: Colors.red, // Icon color
+                          ),
+                          padding: const EdgeInsets.all(
+                              8.0), // Padding around the icon
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -256,16 +380,29 @@ class _DishState extends State<DishScreen> {
                                     horizontal: 12.0, vertical: 4.0),
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(16.0),
-                                  color: const Color(0xFFF0F3F6),
+                                  color: Colors
+                                      .white, // Set background color to white
+                                  border: Border.all(
+                                    color: const Color(
+                                        0xFFD0AD6D), // Outline color
+                                    width: 1.0, // Outline width
+                                  ),
                                 ),
-                                child: Text(tag,
-                                    style: const TextStyle(
-                                        color: Color(0xFFD0AD6D),
-                                        fontSize: 14.0)),
+                                child: Text(
+                                  tag,
+                                  style: const TextStyle(
+                                    color: Color(0xFFD0AD6D), // Text color
+                                    fontSize: 14.0,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               );
                             }).toList(),
                           ),
                         ),
+                      ),
+                      const SizedBox(
+                        height: 8,
                       ),
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 16.0),
@@ -275,6 +412,9 @@ class _DishState extends State<DishScreen> {
                                 fontSize: 16,
                                 color: Color(0xFF333333))),
                       ),
+                      const SizedBox(
+                        height: 8,
+                      ),
                       if (desc.isNotEmpty) ...[
                         const Padding(
                           padding: EdgeInsets.symmetric(
@@ -283,10 +423,13 @@ class _DishState extends State<DishScreen> {
                             'Description',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                              fontSize: 16,
                               color: Color(0xFF333333),
                             ),
                           ),
+                        ),
+                        const SizedBox(
+                          height: 8,
                         ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -308,7 +451,7 @@ class _DishState extends State<DishScreen> {
                         child: Text('Ingredients: ',
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                                fontSize: 16,
                                 color: Color(0xFF564F4F))),
                       ),
                       Padding(
@@ -338,7 +481,7 @@ class _DishState extends State<DishScreen> {
                         child: Text('How to cook: ',
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                                fontSize: 16,
                                 color: Color(0xFF564F4F))),
                       ),
                       Padding(
@@ -366,10 +509,10 @@ class _DishState extends State<DishScreen> {
 
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 30.0),
-                        child: Text('Nutritional Content:',
+                        child: Text('Nutritional Content (Per Serving):',
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                                fontSize: 16,
                                 color: Color(0xFF564F4F))),
                       ),
                       // Nutritional Information pie chart
@@ -377,6 +520,15 @@ class _DishState extends State<DishScreen> {
 
                       const SizedBox(height: 24),
                       _buildRateRecipes(id, dishName),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 30.0),
+                        child: Text('Related Recipes',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Color(0xFF564F4F))),
+                      ),
+                      _buildMoreRecommendation(),
                     ],
                   ),
                 ),
@@ -505,6 +657,127 @@ class _DishState extends State<DishScreen> {
               'No user ID found.'); // Handle case where userId is null
         }
       },
+    );
+  }
+
+  Widget _buildMoreRecommendation() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : SizedBox(
+              height: 275, // Adjust height as needed
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _recommendedTagRecipes
+                    .length, // Number of tag-based recommended recipes
+                itemBuilder: (context, index) {
+                  if (index >= _recommendedTagRecipes.length) {
+                    return const SizedBox.shrink(); // Avoid out-of-range errors
+                  }
+
+                  final recipe = _recommendedTagRecipes[index];
+
+                  return Container(
+                    margin: const EdgeInsets.only(
+                        right: 8.0), // Space between items
+                    width: 200, // Adjust width as needed
+                    child: GestureDetector(
+                      onTap: () {
+                        // Handle onTap event
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => DishScreen(
+                                    recipeData: recipe,
+                                  )),
+                        );
+                      },
+                      child: Card(
+                        elevation: 4.0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: FutureBuilder<String?>(
+                                  future: recipe['links'] != null &&
+                                          recipe['links'].isNotEmpty
+                                      ? Future.value(recipe[
+                                          'links']) // Use provided link if available
+                                      : fetchImageFromPexels(recipe['name'] ??
+                                          'recipe'), // Fetch from Pexels if no link
+                                  builder: (context, snapshot) {
+                                    if (snapshot.connectionState ==
+                                        ConnectionState.waiting) {
+                                      return const Center(
+                                          child: CircularProgressIndicator());
+                                    } else if (snapshot.hasData &&
+                                        snapshot.data != null) {
+                                      return Container(
+                                        width: double.infinity,
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(12.0),
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(12.0),
+                                          child: Image.network(
+                                            snapshot.data!,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      return const Center(
+                                        child: Icon(
+                                          Icons.fastfood,
+                                          size: 40,
+                                          color: Colors.grey,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                              const SizedBox(height: 16.0),
+                              // Text section always at the bottom
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    (recipe['name'] ?? '').toUpperCase(),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4.0),
+                                  Text(
+                                    'Rating: ${(recipe['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                                    style: const TextStyle(
+                                      color: Colors.black,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
     );
   }
 }

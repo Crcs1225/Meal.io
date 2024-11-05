@@ -21,6 +21,8 @@ class _ResultsState extends State<Results> {
   bool _loading = false;
   List<dynamic> _recommendations = [];
   File? _localAnnotatedImage;
+  List<String> tags = [];
+  int recommendCount = 0;
 
   @override
   void initState() {
@@ -33,6 +35,37 @@ class _ResultsState extends State<Results> {
   void dispose() {
     _disposeImageFile(); // Call dispose image method
     super.dispose();
+  }
+
+  final Map<String, String?> imageCache = {};
+
+  Future<String?> fetchImageFromPexels(String query) async {
+    // Check if the image is already in the cache
+    if (imageCache.containsKey(query)) {
+      return imageCache[query];
+    }
+
+    const String apiKey =
+        'SXnk2AcnWw2EEyr5CHP5ICwGbNrtcEH8xLogi6RO8bsYb2TgYPaR9b8Y';
+    final url =
+        Uri.parse('https://api.pexels.com/v1/search?query=$query&per_page=1');
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': apiKey,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['photos'] != null && data['photos'].isNotEmpty) {
+        final imageUrl = data['photos'][0]['src']['medium'];
+        imageCache[query] = imageUrl; // Cache the fetched image URL
+        return imageUrl;
+      }
+    }
+    imageCache[query] = null; // Cache null if no image is found
+    return null;
   }
 
   Future<void> _disposeImageFile() async {
@@ -80,6 +113,45 @@ class _ResultsState extends State<Results> {
     return null;
   }
 
+  Future<void> _fetchUserPreferences() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      print(currentUser);
+      if (currentUser != null) {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+
+        if (userDoc.exists) {
+          Map<String, dynamic>? userData =
+              userDoc.data() as Map<String, dynamic>?;
+          if (userData != null) {
+            List<dynamic>? preferences =
+                userData['preferences'] as List<dynamic>?;
+            if (preferences != null) {
+              print(preferences);
+              setState(() {
+                tags = preferences.map((tag) => tag.toString()).toList();
+              });
+              // Ensure that tag-based recommendations are fetched after preferences are set
+            } else {
+              print('Field "preferences" is missing or is not a list.');
+            }
+          } else {
+            print('User document data is null.');
+          }
+        } else {
+          print('User document not found.');
+        }
+      } else {
+        print('No user is currently signed in.');
+      }
+    } catch (e) {
+      print('Error fetching user preferences: $e');
+    }
+  }
+
   Future<void> _sendIngredients() async {
     setState(() {
       _loading = true;
@@ -92,15 +164,18 @@ class _ResultsState extends State<Results> {
     final body = jsonEncode({
       'ingredients': widget.ingredients,
       'user_id': userId,
+      'preference': tags,
     });
 
     try {
       final response = await http.post(url, headers: headers, body: body);
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        Map<String, dynamic> responseData = json.decode(response.body);
+
         setState(() {
-          _recommendations = data;
+          _recommendations = responseData['recommendations'];
+          recommendCount = responseData['total_recommendable_count'];
         });
       } else {
         // Handle server error
@@ -185,7 +260,9 @@ class _ResultsState extends State<Results> {
             const SizedBox(height: 20),
             Center(
               child: ElevatedButton(
-                onPressed: _loading ? null : _sendIngredients,
+                onPressed: (_loading || widget.ingredients.isEmpty)
+                    ? null
+                    : _sendIngredients,
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
                   backgroundColor: const Color(0xFF83ABD1),
@@ -206,106 +283,146 @@ class _ResultsState extends State<Results> {
             _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _recommendations.isNotEmpty
-                    ? GridView.builder(
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2, // Number of items per row
-                          crossAxisSpacing:
-                              8.0, // Space between items horizontally
-                          mainAxisSpacing:
-                              8.0, // Space between items vertically
-                          childAspectRatio: 0.8, // Aspect ratio of the cards
-                        ),
-                        itemCount: _recommendations.length,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemBuilder: (context, index) {
-                          final dish = _recommendations[index];
-                          return GestureDetector(
-                            onTap: () {
-                              showModalBottomSheet(
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.vertical(
-                                      top: Radius.circular(24)),
-                                ),
-                                context: context,
-                                builder: (context) => DishScreen(
-                                  recipeData:
-                                      dish, // Pass the entire dish object
-                                ),
-                              );
-                            },
-                            child: Card(
-                              elevation: 4.0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12.0),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Column(
-                                  children: [
-                                    Expanded(
-                                      // This will make the image/icon container take remaining space
-                                      child: dish['links'] != null &&
-                                              dish['links'].isNotEmpty
-                                          ? Container(
-                                              width: double.infinity,
-                                              decoration: BoxDecoration(
-                                                borderRadius:
-                                                    BorderRadius.circular(12.0),
-                                              ),
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(12.0),
-                                                child: Image.network(
-                                                  dish['links'],
-                                                  fit: BoxFit.cover,
-                                                ),
-                                              ),
-                                            )
-                                          : Center(
-                                              // Icon will be centered in the remaining space
-                                              child: Icon(
-                                                Icons.fastfood,
-                                                size: 40,
-                                                color: Colors.grey,
-                                              ),
-                                            ),
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Recommended Recipe ($recommendCount matched)",
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          GridView.builder(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2, // Number of items per row
+                              crossAxisSpacing:
+                                  8.0, // Space between items horizontally
+                              mainAxisSpacing:
+                                  8.0, // Space between items vertically
+                              childAspectRatio:
+                                  0.8, // Aspect ratio of the cards
+                            ),
+                            itemCount: _recommendations.length,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemBuilder: (context, index) {
+                              final dish = _recommendations[index];
+                              return GestureDetector(
+                                onTap: () {
+                                  showModalBottomSheet(
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.vertical(
+                                          top: Radius.circular(24)),
                                     ),
-                                    const SizedBox(height: 16.0),
-                                    // Text section always at the bottom
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                    context: context,
+                                    builder: (context) => DishScreen(
+                                      recipeData:
+                                          dish, // Pass the entire dish object
+                                    ),
+                                  );
+                                },
+                                child: Card(
+                                  elevation: 4.0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Column(
                                       children: [
-                                        Text(
-                                          (dish['name'] ?? '').toUpperCase(),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.black,
+                                        Expanded(
+                                          child: FutureBuilder<String?>(
+                                            future: dish['links'] != null &&
+                                                    dish['links'].isNotEmpty
+                                                ? Future.value(dish[
+                                                    'links']) // Use provided link if available
+                                                : fetchImageFromPexels(dish[
+                                                        'name'] ??
+                                                    'recipe'), // Fetch from Pexels if no link
+                                            builder: (context, snapshot) {
+                                              if (snapshot.connectionState ==
+                                                  ConnectionState.waiting) {
+                                                return const Center(
+                                                    child:
+                                                        CircularProgressIndicator());
+                                              } else if (snapshot.hasData &&
+                                                  snapshot.data != null) {
+                                                return Container(
+                                                  width: double.infinity,
+                                                  decoration: BoxDecoration(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12.0),
+                                                  ),
+                                                  child: ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12.0),
+                                                    child: Image.network(
+                                                      snapshot.data!,
+                                                      fit: BoxFit.cover,
+                                                    ),
+                                                  ),
+                                                );
+                                              } else {
+                                                return const Center(
+                                                  child: Icon(
+                                                    Icons.fastfood,
+                                                    size: 40,
+                                                    color: Colors.grey,
+                                                  ),
+                                                );
+                                              }
+                                            },
                                           ),
-                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        const SizedBox(height: 4.0),
-                                        Text(
-                                          'Rating: ${(dish['rating']?.toStringAsFixed(1) ?? '0.0')}',
-                                          style: const TextStyle(
-                                            color: Colors.black,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
+                                        const SizedBox(height: 16.0),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              (dish['name'] ?? '')
+                                                  .toUpperCase(),
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.black,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 4.0),
+                                            Text(
+                                              'Rating: ${(dish['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                                              style: const TextStyle(
+                                                color: Colors.black,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ),
-                          );
-                        },
+                              );
+                            },
+                          ),
+                        ],
                       )
-                    : const Center(child: Text('No recommendations yet')),
+                    : Center(
+                        child: Text(
+                          widget.ingredients.isNotEmpty
+                              ? "Can't recommend"
+                              : "Please provide ingredients to get recommendations.",
+                          style:
+                              const TextStyle(fontSize: 16, color: Colors.grey),
+                        ),
+                      ),
           ],
         ),
       ),
@@ -316,25 +433,22 @@ class _ResultsState extends State<Results> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
       decoration: BoxDecoration(
-        color: const Color(0xFFD0AD6D),
-        borderRadius: BorderRadius.circular(8.0),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            offset: Offset(0, 2),
-            blurRadius: 4.0,
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16.0),
+        color: Colors.white, // Set background color to white
+        border: Border.all(
+          color: Color.fromRGBO(208, 173, 109, 1), // Outline color
+          width: 1.0, // Outline width
+        ),
       ),
       child: Center(
         child: Text(
           ingredient,
           textAlign: TextAlign.center,
           style: const TextStyle(
-            color: Colors.white,
+            color: Color.fromRGBO(208, 173, 109, 1),
             fontStyle: FontStyle.italic,
-            fontWeight: FontWeight.normal,
-            fontSize: 10.0, // Adjust text size here
+            fontWeight: FontWeight.bold,
+            fontSize: 14.0, // Adjust text size here
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis, // Ensure long text gets truncated

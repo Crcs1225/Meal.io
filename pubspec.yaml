@@ -134,7 +134,9 @@ flutter:
 
 flutter_launcher_icons:
   android: "launcher_icon"
-  
-  image_path: "assets/playstore-icon.png"
+  image_path: "assets/icon1.png"
   min_sdk_android: 26
-  
+  adaptive_icon_background: "#ffffff" # Required for Android 8 and above
+  adaptive_icon_foreground: "assets/icon1.png" # Required for Android 8 and above
+  adaptive_icon_monochrome: "assets/icon1.png" # Optional, for Android 13+
+  remove_alpha_ios: true

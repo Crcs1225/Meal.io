@@ -61,6 +61,37 @@ class _TagScreenState extends State<TagScreen> {
     }
   }
 
+  final Map<String, String?> imageCache = {};
+
+  Future<String?> fetchImageFromPexels(String query) async {
+    // Check if the image is already in the cache
+    if (imageCache.containsKey(query)) {
+      return imageCache[query];
+    }
+
+    const String apiKey =
+        'SXnk2AcnWw2EEyr5CHP5ICwGbNrtcEH8xLogi6RO8bsYb2TgYPaR9b8Y';
+    final url =
+        Uri.parse('https://api.pexels.com/v1/search?query=$query&per_page=1');
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': apiKey,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['photos'] != null && data['photos'].isNotEmpty) {
+        final imageUrl = data['photos'][0]['src']['medium'];
+        imageCache[query] = imageUrl; // Cache the fetched image URL
+        return imageUrl;
+      }
+    }
+    imageCache[query] = null; // Cache null if no image is found
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -126,46 +157,81 @@ class _TagScreenState extends State<TagScreen> {
                             );
                           },
                           child: Card(
-                            elevation:
-                                4.0, // Add elevation for card-like appearance
+                            elevation: 4.0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12.0),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.all(8.0),
+                              padding: const EdgeInsets.all(16.0),
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Container(
-                                    height: 80, // Adjust height as needed
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[200],
-                                      borderRadius: BorderRadius.circular(12.0),
+                                  Expanded(
+                                    child: FutureBuilder<String?>(
+                                      future: recipe['links'] != null &&
+                                              recipe['links'].isNotEmpty
+                                          ? Future.value(recipe[
+                                              'links']) // Use provided link if available
+                                          : fetchImageFromPexels(recipe[
+                                                  'name'] ??
+                                              'recipe'), // Fetch from Pexels if no link
+                                      builder: (context, snapshot) {
+                                        if (snapshot.connectionState ==
+                                            ConnectionState.waiting) {
+                                          return const Center(
+                                              child:
+                                                  CircularProgressIndicator());
+                                        } else if (snapshot.hasData &&
+                                            snapshot.data != null) {
+                                          return Container(
+                                            width: double.infinity,
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(12.0),
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(12.0),
+                                              child: Image.network(
+                                                snapshot.data!,
+                                                fit: BoxFit.cover,
+                                              ),
+                                            ),
+                                          );
+                                        } else {
+                                          return const Center(
+                                            child: Icon(
+                                              Icons.fastfood,
+                                              size: 40,
+                                              color: Colors.grey,
+                                            ),
+                                          );
+                                        }
+                                      },
                                     ),
-                                    child: const Center(
-                                      child: Icon(
-                                        Icons.fastfood,
-                                        size: 40,
-                                        color: Colors.grey,
+                                  ),
+                                  const SizedBox(height: 16.0),
+                                  // Text section always at the bottom
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        (recipe['name'] ?? '').toUpperCase(),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8.0),
-                                  Text(
-                                    (recipe['name'] ?? '').toUpperCase(),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 4.0),
-                                  Text(
-                                    'Rating: ${(recipe['rating']?.toStringAsFixed(1) ?? '0.0')}',
-                                    style: const TextStyle(
-                                      color: Colors.black,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
+                                      const SizedBox(height: 4.0),
+                                      Text(
+                                        'Rating: ${(recipe['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                                        style: const TextStyle(
+                                          color: Colors.black,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),

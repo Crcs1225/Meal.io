@@ -301,10 +301,9 @@ class _DetectPageState extends State<DetectPage> {
               onPressed: () async {
                 // Show a Snackbar indicating detection is in progress
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Detecting ingredients...'),
-                    duration:
-                        const Duration(seconds: 2), // Duration for the Snackbar
+                  const SnackBar(
+                    content: Text('Detecting ingredients...'),
+                    duration: Duration(seconds: 2), // Duration for the Snackbar
                   ),
                 );
                 await Future.delayed(const Duration(seconds: 1));

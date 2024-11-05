@@ -37,6 +37,7 @@ class _HomePageState extends State<HomePage> {
   List<String> allPreferences = [];
   List<String> displayedPreferences = [];
   bool isLoading = true;
+  int recommendCount = 0;
   final TextEditingController searchController = TextEditingController();
 
   //add ingredients to the list
@@ -86,22 +87,34 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  void _handleSearchInput(String value) {
-    if (value.isEmpty) {
-      // Show the initial 10 preferences when search input is empty
-      setState(() {
-        displayedPreferences = allPreferences.take(3).toList();
-      });
-    } else {
-      // Filter all preferences based on search input
-      final filtered = allPreferences
-          .where((preference) =>
-              preference.toLowerCase().contains(value.toLowerCase()))
-          .toList();
-      // Show all related preferences from the full list
+  void _handleSearchInput(String value) async {
+    try {
+      QuerySnapshot querySnapshot;
+
+      if (value.isEmpty) {
+        // Fetch the first 10 tags when the input is empty
+        querySnapshot =
+            await FirebaseFirestore.instance.collection('tags').limit(5).get();
+      } else {
+        // Fetch tags that start with the search input
+        querySnapshot = await FirebaseFirestore.instance
+            .collection('tags')
+            .where('tag', isGreaterThanOrEqualTo: value)
+            .where('tag',
+                isLessThanOrEqualTo: '$value\uf8ff') // For prefix matching
+            .limit(5) // Limit to the top 10 results
+            .get();
+      }
+
+      // Convert Firestore results to a list of tag names
+      final filtered =
+          querySnapshot.docs.map((doc) => doc['tag'].toString()).toList();
+
       setState(() {
         displayedPreferences = filtered;
       });
+    } catch (e) {
+      print('Error fetching tags: $e');
     }
   }
 
@@ -144,9 +157,13 @@ class _HomePageState extends State<HomePage> {
     );
 
     if (response.statusCode == 200) {
+      Map<String, dynamic> responseData = json.decode(response.body);
       setState(() {
-        _recommendations = json.decode(response.body);
+        _recommendations = responseData['recommendations'];
+        recommendCount = responseData['total_recommendable_count'];
       });
+      print('Recommendations: $_recommendations');
+      print('Total recommendable count: $recommendCount');
     } else {
       // Handle error
       print('Failed to get recommendations');
@@ -229,7 +246,7 @@ class _HomePageState extends State<HomePage> {
     } else {
       // Handle the case when user ID is null (optional)
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Unable to fetch user ID. Please try again.'),
           backgroundColor: Colors.red,
         ),
@@ -323,7 +340,8 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _TagBasedRecommendations() async {
+//eto sa tag sa taas
+  Future<void> _tagBasedRecommendations() async {
     setState(() {
       _isLoading = true;
     });
@@ -338,6 +356,7 @@ class _HomePageState extends State<HomePage> {
         body: json.encode({
           'tags': selectedPreferences,
           'user_id': userId,
+          'n': 10,
         }),
       );
 
@@ -381,8 +400,13 @@ class _HomePageState extends State<HomePage> {
             if (preferences != null) {
               print(preferences);
               setState(() {
-                _selectedTags =
-                    preferences.map((tag) => tag.toString()).toList();
+                _selectedTags = preferences
+                    .map((tag) {
+                      // Check if `tag` is already a String, otherwise, convert it to String
+                      return tag?.toString() ?? '';
+                    })
+                    .where((tag) => tag.isNotEmpty)
+                    .toList();
               });
               // Ensure that tag-based recommendations are fetched after preferences are set
               await _fetchTagBasedRecommendations();
@@ -401,6 +425,37 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       print('Error fetching user preferences: $e');
     }
+  }
+
+  final Map<String, String?> imageCache = {};
+
+  Future<String?> fetchImageFromPexels(String query) async {
+    // Check if the image is already in the cache
+    if (imageCache.containsKey(query)) {
+      return imageCache[query];
+    }
+
+    const String apiKey =
+        'SXnk2AcnWw2EEyr5CHP5ICwGbNrtcEH8xLogi6RO8bsYb2TgYPaR9b8Y';
+    final url =
+        Uri.parse('https://api.pexels.com/v1/search?query=$query&per_page=1');
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': apiKey,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['photos'] != null && data['photos'].isNotEmpty) {
+        final imageUrl = data['photos'][0]['src']['medium'];
+        imageCache[query] = imageUrl; // Cache the fetched image URL
+        return imageUrl;
+      }
+    }
+    imageCache[query] = null; // Cache null if no image is found
+    return null;
   }
 
   @override
@@ -543,14 +598,14 @@ class _HomePageState extends State<HomePage> {
                                 Icon(
                                   _showIngredientRecommendation
                                       ? Icons.close
-                                      : Icons.apple,
-                                  size: 24,
+                                      : Icons.local_dining,
+                                  size: 50,
                                   color: Colors.white,
                                 ),
                                 const SizedBox(height: 8.0),
                                 Text(
                                   _showIngredientRecommendation
-                                      ? 'Close Ingredients'
+                                      ? 'Close'
                                       : 'Ingredients',
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
@@ -586,14 +641,12 @@ class _HomePageState extends State<HomePage> {
                                   _showTagRecommendation
                                       ? Icons.close
                                       : Icons.label_outline,
-                                  size: 24,
+                                  size: 50,
                                   color: Colors.white,
                                 ),
                                 const SizedBox(height: 8.0),
                                 Text(
-                                  _showTagRecommendation
-                                      ? 'Close Tags'
-                                      : 'Tags',
+                                  _showTagRecommendation ? 'Close' : 'Tags',
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                     color: Colors.white,
@@ -649,18 +702,17 @@ class _HomePageState extends State<HomePage> {
                     : GridView.builder(
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2, // Number of items per row
-                          crossAxisSpacing:
-                              8.0, // Space between items horizontally
-                          mainAxisSpacing:
-                              8.0, // Space between items vertically
-                          childAspectRatio: 0.8, // Aspect ratio of the cards
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 8.0,
+                          mainAxisSpacing: 8.0,
+                          childAspectRatio: 0.8,
                         ),
                         itemCount: _topRecipes.length,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemBuilder: (context, index) {
                           final dish = _topRecipes[index];
+
                           return GestureDetector(
                             onTap: () {
                               showModalBottomSheet(
@@ -672,8 +724,7 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 context: context,
                                 builder: (context) => DishScreen(
-                                  recipeData:
-                                      dish, // Pass the entire dish object
+                                  recipeData: dish,
                                 ),
                               );
                             },
@@ -687,10 +738,23 @@ class _HomePageState extends State<HomePage> {
                                 child: Column(
                                   children: [
                                     Expanded(
-                                      // This will make the image/icon container take remaining space
-                                      child: dish['links'] != null &&
-                                              dish['links'].isNotEmpty
-                                          ? Container(
+                                      child: FutureBuilder<String?>(
+                                        future: dish['links'] != null &&
+                                                dish['links'].isNotEmpty
+                                            ? Future.value(dish[
+                                                'links']) // Use provided link if available
+                                            : fetchImageFromPexels(dish[
+                                                    'name'] ??
+                                                'recipe'), // Fetch from Pexels if no link
+                                        builder: (context, snapshot) {
+                                          if (snapshot.connectionState ==
+                                              ConnectionState.waiting) {
+                                            return const Center(
+                                                child:
+                                                    CircularProgressIndicator());
+                                          } else if (snapshot.hasData &&
+                                              snapshot.data != null) {
+                                            return Container(
                                               width: double.infinity,
                                               decoration: BoxDecoration(
                                                 borderRadius:
@@ -700,22 +764,24 @@ class _HomePageState extends State<HomePage> {
                                                 borderRadius:
                                                     BorderRadius.circular(12.0),
                                                 child: Image.network(
-                                                  dish['links'],
+                                                  snapshot.data!,
                                                   fit: BoxFit.cover,
                                                 ),
                                               ),
-                                            )
-                                          : Center(
-                                              // Icon will be centered in the remaining space
+                                            );
+                                          } else {
+                                            return const Center(
                                               child: Icon(
                                                 Icons.fastfood,
                                                 size: 40,
                                                 color: Colors.grey,
                                               ),
-                                            ),
+                                            );
+                                          }
+                                        },
+                                      ),
                                     ),
                                     const SizedBox(height: 16.0),
-                                    // Text section always at the bottom
                                     Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -822,10 +888,23 @@ class _HomePageState extends State<HomePage> {
                                 child: Column(
                                   children: [
                                     Expanded(
-                                      // This will make the image/icon container take remaining space
-                                      child: recipe['links'] != null &&
-                                              recipe['links'].isNotEmpty
-                                          ? Container(
+                                      child: FutureBuilder<String?>(
+                                        future: recipe['links'] != null &&
+                                                recipe['links'].isNotEmpty
+                                            ? Future.value(recipe[
+                                                'links']) // Use provided link if available
+                                            : fetchImageFromPexels(recipe[
+                                                    'name'] ??
+                                                'recipe'), // Fetch from Pexels if no link
+                                        builder: (context, snapshot) {
+                                          if (snapshot.connectionState ==
+                                              ConnectionState.waiting) {
+                                            return const Center(
+                                                child:
+                                                    CircularProgressIndicator());
+                                          } else if (snapshot.hasData &&
+                                              snapshot.data != null) {
+                                            return Container(
                                               width: double.infinity,
                                               decoration: BoxDecoration(
                                                 borderRadius:
@@ -835,19 +914,22 @@ class _HomePageState extends State<HomePage> {
                                                 borderRadius:
                                                     BorderRadius.circular(12.0),
                                                 child: Image.network(
-                                                  recipe['links'],
+                                                  snapshot.data!,
                                                   fit: BoxFit.cover,
                                                 ),
                                               ),
-                                            )
-                                          : Center(
-                                              // Icon will be centered in the remaining space
+                                            );
+                                          } else {
+                                            return const Center(
                                               child: Icon(
                                                 Icons.fastfood,
                                                 size: 40,
                                                 color: Colors.grey,
                                               ),
-                                            ),
+                                            );
+                                          }
+                                        },
+                                      ),
                                     ),
                                     const SizedBox(height: 16.0),
                                     // Text section always at the bottom
@@ -1011,7 +1093,7 @@ class _HomePageState extends State<HomePage> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _TagBasedRecommendations,
+            onPressed: _tagBasedRecommendations,
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF83ABD1),
               shape: RoundedRectangleBorder(
@@ -1030,94 +1112,114 @@ class _HomePageState extends State<HomePage> {
 
   // Widget to display the recommendation list
   Widget _buildRecommendationListIngredients() {
-    return SizedBox(
-      height: 275,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _recommendations.length,
-        itemBuilder: (context, index) {
-          final recommendation = _recommendations[index];
-          return GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => DishScreen(
-                    recipeData: recommendation,
-                  ),
-                ),
-              );
-              print('$recommendation');
-            },
-            child: Container(
-              width: 200,
-              margin: const EdgeInsets.only(right: 16.0),
-              child: Card(
-                elevation: 4.0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12.0),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      Expanded(
-                        // This will make the image/icon container take remaining space
-                        child: recommendation['links'] != null &&
-                                recommendation['links'].isNotEmpty
-                            ? Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12.0),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12.0),
-                                  child: Image.network(
-                                    recommendation['links'],
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              )
-                            : Center(
-                                // Icon will be centered in the remaining space
-                                child: Icon(
-                                  Icons.fastfood,
-                                  size: 40,
-                                  color: Colors.grey,
-                                ),
-                              ),
+    return Column(
+      children: [
+        Text('$recommendCount recipes found'),
+        SizedBox(
+          height: 275,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _recommendations.length,
+            itemBuilder: (context, index) {
+              final recommendation = _recommendations[index];
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => DishScreen(
+                        recipeData: recommendation,
                       ),
-                      const SizedBox(height: 16.0),
-                      // Text section always at the bottom
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                  );
+                  print('$recommendation');
+                },
+                child: Container(
+                  width: 200,
+                  margin: const EdgeInsets.only(right: 16.0),
+                  child: Card(
+                    elevation: 4.0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
                         children: [
-                          Text(
-                            (recommendation['name'] ?? '').toUpperCase(),
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
+                          Expanded(
+                            child: FutureBuilder<String?>(
+                              future: recommendation['links'] != null &&
+                                      recommendation['links'].isNotEmpty
+                                  ? Future.value(recommendation[
+                                      'links']) // Use provided link if available
+                                  : fetchImageFromPexels(recommendation[
+                                          'name'] ??
+                                      'recipe'), // Fetch from Pexels if no link
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const Center(
+                                      child: CircularProgressIndicator());
+                                } else if (snapshot.hasData &&
+                                    snapshot.data != null) {
+                                  return Container(
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12.0),
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(12.0),
+                                      child: Image.network(
+                                        snapshot.data!,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  );
+                                } else {
+                                  return const Center(
+                                    child: Icon(
+                                      Icons.fastfood,
+                                      size: 40,
+                                      color: Colors.grey,
+                                    ),
+                                  );
+                                }
+                              },
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 4.0),
-                          Text(
-                            'Rating: ${(recommendation['rating']?.toStringAsFixed(1) ?? '0.0')}',
-                            style: const TextStyle(
-                              color: Colors.black,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                          const SizedBox(height: 16.0),
+                          // Text section always at the bottom
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (recommendation['name'] ?? '').toUpperCase(),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4.0),
+                              Text(
+                                'Rating: ${(recommendation['rating']?.toStringAsFixed(1) ?? '0.0')}',
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -1161,10 +1263,21 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     children: [
                       Expanded(
-                        // This will make the image/icon container take remaining space
-                        child: recommendation['links'] != null &&
-                                recommendation['links'].isNotEmpty
-                            ? Container(
+                        child: FutureBuilder<String?>(
+                          future: recommendation['links'] != null &&
+                                  recommendation['links'].isNotEmpty
+                              ? Future.value(recommendation[
+                                  'links']) // Use provided link if available
+                              : fetchImageFromPexels(recommendation['name'] ??
+                                  'recipe'), // Fetch from Pexels if no link
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const Center(
+                                  child: CircularProgressIndicator());
+                            } else if (snapshot.hasData &&
+                                snapshot.data != null) {
+                              return Container(
                                 width: double.infinity,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(12.0),
@@ -1172,19 +1285,22 @@ class _HomePageState extends State<HomePage> {
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(12.0),
                                   child: Image.network(
-                                    recommendation['links'],
+                                    snapshot.data!,
                                     fit: BoxFit.cover,
                                   ),
                                 ),
-                              )
-                            : Center(
-                                // Icon will be centered in the remaining space
+                              );
+                            } else {
+                              return const Center(
                                 child: Icon(
                                   Icons.fastfood,
                                   size: 40,
                                   color: Colors.grey,
                                 ),
-                              ),
+                              );
+                            }
+                          },
+                        ),
                       ),
                       const SizedBox(height: 16.0),
                       // Text section always at the bottom
